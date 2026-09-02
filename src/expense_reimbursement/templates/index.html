@@ -70,9 +70,6 @@
         <div class="field"><label>报销部门</label><input name="department" id="deptInput" value="运营八部" placeholder="如：运营八部"></div>
         <div class="field"><label>报销人</label><input name="reimburser" value="陈兴华" placeholder="默认 陈兴华"></div>
         <div class="field"><label>报销日期（默认今天）</label><input name="date" type="date" id="reimbDate"></div>
-        <div class="field"><label>支付方式</label><select name="payment_method" id="pmSelect">
-          {% for pm in payments %}{% if pm != "其他" %}<option value="{{ pm }}"{% if pm == "银行转账" %} selected{% endif %}>{{ pm }}</option>{% endif %}{% endfor %}
-        </select></div>
         <div class="field full"><label>备注（整单，可选）</label><input name="remarks" id="reimbRemarks" placeholder="如：本次出差住宿费，含两晚；发票已验真"></div>
       </div>
 
@@ -158,7 +155,7 @@
             img: data.img || '',
             project: data.project || '',
             subject: data.subject || (data.merchant || ''),
-            remarks: data.remarks || '',
+            remarks: '',
             amount: data.amount || '0',
             pages: data.pages || 1
           });

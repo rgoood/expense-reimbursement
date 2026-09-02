@@ -18,6 +18,7 @@
     .btn:hover { opacity:.9; }
     .b-blue { background:var(--blue); }
     .b-green { background:#27a763; }
+    .b-dark { background:#3a3f4b; }
     table { width:100%; border-collapse:collapse; font-size:14px; }
     td,th { border:1px solid var(--line); padding:8px 10px; text-align:left; }
     th { background:#f0f4fb; color:var(--blue2); width:34%; }
@@ -47,6 +48,7 @@
   <div class="actions">
     <a class="btn b-blue" href="{{ form_url }}" download>下载报销单 PDF</a>
     <a class="btn b-green" href="{{ receipt_url }}" download>下载凭证 PDF</a>
+    <button type="button" class="btn b-dark" id="printAllBtn" data-src="{{ combined_url }}">一键打印全部</button>
   </div>
 
   <div class="card">
@@ -56,8 +58,7 @@
       <tr><th>报销部门</th><td>{{ reimb_info.department or '—' }}</td></tr>
       <tr><th>报销项目</th><td>{{ reimb_info.subject or '—' }}</td></tr>
       <tr><th>合计金额</th><td>¥ {{ total }}</td></tr>
-      <tr><th>支付方式</th><td>{{ reimb_info.payment_method or '—' }}</td></tr>
-      <tr><th>报销人</th><td>{{ reimb_info.reimburser or '陈兴华' }}</td></tr>
+            <tr><th>报销人</th><td>{{ reimb_info.reimburser or '陈兴华' }}</td></tr>
       <tr><th>单据及附件</th><td>{{ reimb_info.attachment_pages }} 页</td></tr>
       <tr><th>备注</th><td>{{ reimb_info.remarks or '—' }}</td></tr>
     </table>
@@ -94,6 +95,19 @@
     modal.addEventListener('click', function(e){ if(e.target === modal) closePdf(); });
     document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closePdf(); });
   })();
+  const printBtn = document.getElementById('printAllBtn');
+  if (printBtn) printBtn.addEventListener('click', function(){
+    const url = printBtn.getAttribute('data-src');
+    if (!url) return;
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = url;
+    iframe.onload = function(){
+      try { iframe.contentWindow.focus(); iframe.contentWindow.print(); }
+      catch(e){ window.open(url, '_blank'); }
+    };
+    document.body.appendChild(iframe);
+  });
 </script>
 </body>
 </html>

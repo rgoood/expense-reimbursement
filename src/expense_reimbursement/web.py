@@ -297,12 +297,25 @@ def process() -> Any:
 
     r = result.reimbursement
     total = sum((item.amount for item in r.items), Decimal("0"))
+
+# 合并报销单 + 凭证为一个 PDF 供一键打印
+    combined_path = OUTPUT_DIR / "combined_all.pdf"
+    try:
+        import pymupdf
+        with pymupdf.open() as doc:  # type: ignore[no-untyped-call]
+            for src in (result.form_path, result.receipt_path):
+                with pymupdf.open(src) as sub:  # type: ignore[no-untyped-call]
+                    doc.insert_pdf(sub)
+            doc.save(combined_path)
+    except Exception:
+        combined_path = result.form_path
     return render_template(
         "result.html",
         form_name=result.form_path.name,
         receipt_name=result.receipt_path.name,
         form_url=url_for("download", filename=result.form_path.name),
         receipt_url=url_for("download", filename=result.receipt_path.name),
+        combined_url=url_for("download", filename=combined_path.name),
         merchant="、".join((row.get("subject") or "") for row in rows),
         total=str(total),
         capital=r.subject,

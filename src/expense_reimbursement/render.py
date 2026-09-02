@@ -141,6 +141,13 @@ Y_SIGN = 319.0      # 签字栏
 # 模板文字 bbox 顶部 y（用于基线对齐，size*0.8 偏移）
 TXT_MULT = 0.745
 
+# 报销单整页缩放（只拉垂直方向填满 + 放大字号；水平坐标已近满宽不动）
+FORM_SCALE = {"ys": 1.0, "y0": 0.0, "y_ref": 0.0, "fs": 1.0, "fx": 1.0}
+
+
+def _ymap(y_top: float) -> float:
+    return FORM_SCALE["y0"] + (y_top - FORM_SCALE["y_ref"]) * FORM_SCALE["ys"]
+
 
 def _amt_cx(i: int) -> float:
     """金额分列第 i 列中心 x。"""
@@ -161,15 +168,17 @@ def _text(
     """在 y_top（页顶 bbox 顶部）处绘制文字。"""
 
     _register_font()
-    c.setFont(FONT, size)
+    sz = size * FORM_SCALE["fs"]
+    c.setFont(FONT, sz)
     c.setFillColor(color)
-    baseline = PAGE_H - (y_top + size * TXT_MULT)
+    xx = x * FORM_SCALE["fx"]
+    baseline = PAGE_H - (_ymap(y_top) + sz * TXT_MULT)
     if align == "center":
-        c.drawCentredString(x, baseline, s)
+        c.drawCentredString(xx, baseline, s)
     elif align == "right":
-        c.drawRightString(x, baseline, s)
+        c.drawRightString(xx, baseline, s)
     else:
-        c.drawString(x, baseline, s)
+        c.drawString(xx, baseline, s)
 
 
 def _line(
@@ -177,7 +186,7 @@ def _line(
 ) -> None:
     c.setStrokeColor(BLUE)
     c.setLineWidth(w)
-    c.line(x1, ty(y1), x2, ty(y2))
+    c.line(x1 * FORM_SCALE["fx"], ty(_ymap(y1)), x2 * FORM_SCALE["fx"], ty(_ymap(y2)))
 
 
 
@@ -255,13 +264,14 @@ def _draw_date_centered(
     parts.append(("月", unit_color))
     parts.append((day, digit_color))
     parts.append(("日", unit_color))
-    width = sum(pdfmetrics.stringWidth(s, FONT, size) for s, _ in parts)
-    x = center_x - width / 2
+    sz = size * FORM_SCALE["fs"]
+    width = sum(pdfmetrics.stringWidth(s, FONT, sz) for s, _ in parts)
+    x = (center_x * FORM_SCALE["fx"]) - width / 2
     for s, col in parts:
-        c.setFont(FONT, size)
+        c.setFont(FONT, sz)
         c.setFillColor(col)
-        c.drawString(x, PAGE_H - (y_top + size * TXT_MULT), s)
-        x += pdfmetrics.stringWidth(s, FONT, size)
+        c.drawString(x, PAGE_H - (_ymap(y_top) + sz * TXT_MULT), s)
+        x += pdfmetrics.stringWidth(s, FONT, sz)
 
 
 def _fit(text: str, max_w: float, size: float) -> str:
@@ -281,6 +291,9 @@ def render_reimbursement_form(r: Reimbursement, output_path: Path) -> Path:
     _register_font()
     c = canvas.Canvas(str(output_path), pagesize=(PAGE_W, PAGE_H))
     BLK = (0.05, 0.05, 0.05)
+    global FORM_SCALE
+    _prev_scale = FORM_SCALE
+    FORM_SCALE = {'ys': 1.38, 'y0': 55.0, 'y_ref': 101.0, 'fs': 1.28, 'fx': 1.0}
 
     # ---- 标题（与下划线居中）----
     mid = PAGE_W / 2
@@ -288,16 +301,24 @@ def render_reimbursement_form(r: Reimbursement, output_path: Path) -> Path:
     for y in (116.9, 117.8, 118.3):
         _line(c, mid - 117.6, y, mid + 117.6, y, 0.5)
 
-    # ---- 表头信息行（标签蓝，值黑）----
-    _text(c, 14.8, 124.2, "报销部门：", 6.6, BLUE)
-    _text(c, 48.5, 124.2, r.department, 6.6, BLACK)
+    # ---- 表头信息行（标签蓝，值黑；按放大后字宽排布，避免重叠）----
+    _fs = FORM_SCALE["fs"]
+    _label_x = 14.8
+    _text(c, _label_x, 124.2, "报销部门：", 6.6, BLUE)
+    _dept_x = _label_x + pdfmetrics.stringWidth("报销部门：", FONT, 6.6 * _fs) + 3
+    _text(c, _dept_x, 124.2, r.department, 6.6, BLACK)
     _draw_date_centered(c, 297.5, 124.2, r.created_at, 6.6, BLACK, BLUE)
     pages_cn = "壹贰叁肆伍陆柒捌玖"[r.attachment_pages - 1]
     if not (1 <= r.attachment_pages <= 9):
         pages_cn = str(r.attachment_pages)
-    _text(c, 453.7, 124.2, "单据及附件共 ", 6.6, BLUE)
-    _text(c, 497.6, 124.2, pages_cn, 6.6, BLK)
-    _text(c, 504.3, 124.2, " 页", 6.6, BLUE)
+    _att_label = "单据及附件共 "
+    _att_w = pdfmetrics.stringWidth(_att_label, FONT, 6.6 * _fs)
+    _pages_w = pdfmetrics.stringWidth(pages_cn, FONT, 6.6 * _fs)
+    _tail_w = pdfmetrics.stringWidth(" 页", FONT, 6.6 * _fs)
+    _att_x = 583.0 - (_att_w + 3 + _pages_w + 3 + _tail_w)
+    _text(c, _att_x, 124.2, _att_label, 6.6, BLUE)
+    _text(c, _att_x + _att_w + 3, 124.2, pages_cn, 6.6, BLK)
+    _text(c, _att_x + _att_w + 3 + _pages_w + 3, 124.2, " 页", 6.6, BLUE)
 
     # ---- 列表头（蓝色标签）----
     _text(c, 50.4, 141.2, "报销项目", 7.7, BLUE)
@@ -389,6 +410,7 @@ def render_reimbursement_form(r: Reimbursement, output_path: Path) -> Path:
 
     c.showPage()
     c.save()
+    FORM_SCALE = _prev_scale
     return output_path
 
 
@@ -396,6 +418,51 @@ def render_reimbursement_form(r: Reimbursement, output_path: Path) -> Path:
 REC_TOP = PAGE_H - 66      # 图片允许的最高底部坐标
 REC_BOTTOM = 86            # 图片允许的最低底部坐标
 REC_AVAIL = REC_TOP - REC_BOTTOM  # 可用垂直高度
+
+
+def _draw_receipt_image(c: canvas.Canvas, image_path: Path) -> None:
+    """把凭证图放进内容区：横图正向居中；竖长图旋转 90° 横放并居中。"""
+
+    from PIL import Image
+
+    with Image.open(image_path) as img:
+        iw, ih = img.size
+    maxw = PAGE_W - 40
+    maxh = REC_AVAIL
+    center_x = PAGE_W / 2
+    center_y = REC_BOTTOM + REC_AVAIL / 2
+    if ih > iw:
+        # 竖长图：旋转 90° 横放，视觉宽=ih*s、视觉高=iw*s
+        s = min(maxw / ih, maxh / iw)
+        w = iw * s
+        h = ih * s
+        c.saveState()
+        c.translate(center_x, center_y)
+        c.rotate(90)
+        c.drawImage(
+            str(image_path),
+            -w / 2,
+            -h / 2,
+            width=w,
+            height=h,
+            preserveAspectRatio=False,
+        )
+        c.restoreState()
+    else:
+        # 横图：正向水平+垂直居中
+        ratio = min(maxw / iw, maxh / ih)
+        dw = iw * ratio
+        dh = ih * ratio
+        cx = (PAGE_W - dw) / 2
+        cy = REC_BOTTOM + (REC_AVAIL - dh) / 2
+        c.drawImage(
+            str(image_path),
+            cx,
+            cy,
+            width=dw,
+            height=dh,
+            preserveAspectRatio=True,
+        )
 
 
 def render_receipt(
@@ -407,16 +474,7 @@ def render_receipt(
     c = canvas.Canvas(str(output_path), pagesize=(PAGE_W, PAGE_H))
     _text(c, PAGE_W / 2, PAGE_H - 40, "报销凭证", 14, BLUE, "center")
     if image_path and Path(image_path).exists():
-        from PIL import Image
-
-        with Image.open(image_path) as img:
-            iw, ih = img.size
-        maxw, maxh = PAGE_W - 40, REC_AVAIL
-        ratio = min(maxw / iw, maxh / ih)
-        dw, dh = iw * ratio, ih * ratio
-        cx = (PAGE_W - dw) / 2
-        cy = REC_BOTTOM + (REC_AVAIL - dh) / 2
-        c.drawImage(str(image_path), cx, cy, width=dw, height=dh, preserveAspectRatio=True)
+        _draw_receipt_image(c, image_path)
         if summary:
             _text(c, PAGE_W / 2, 40, "识别摘要：" + summary, 8, BLUE, "center")
     else:
@@ -438,16 +496,7 @@ def render_receipts(
     for idx, image in enumerate(images):
         _text(c, PAGE_W / 2, PAGE_H - 40, f"报销凭证 {idx + 1}", 14, BLUE, "center")
         if Path(image).exists():
-            from PIL import Image
-
-            with Image.open(image) as img:
-                iw, ih = img.size
-            maxw, maxh = PAGE_W - 40, REC_AVAIL
-            ratio = min(maxw / iw, maxh / ih)
-            dw, dh = iw * ratio, ih * ratio
-            cx = (PAGE_W - dw) / 2
-            cy = REC_BOTTOM + (REC_AVAIL - dh) / 2
-            c.drawImage(str(image), cx, cy, width=dw, height=dh, preserveAspectRatio=True)
+            _draw_receipt_image(c, image)
             if idx < len(summaries) and summaries[idx]:
                 _text(c, PAGE_W / 2, 40, "识别摘要：" + summaries[idx], 8, BLUE, "center")
         else:
