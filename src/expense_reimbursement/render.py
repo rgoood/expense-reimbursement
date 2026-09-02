@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -18,7 +19,7 @@ PAGE_W, PAGE_H = A5[1], A5[0]
 FONT = "KaiTi"
 FONT_PATH = "C:/Windows/Fonts/simkai.ttf"
 FALLBACK_FONT = "STSong-Light"
-BLUE = (0.04, 0.32, 0.6)
+BLUE = (49 / 255, 117 / 255, 201 / 255)
 BLACK = (0.05, 0.05, 0.05)
 
 
@@ -178,20 +179,55 @@ def _wrap_lines(text: str, max_w: float, size: float, max_lines: int = 3) -> lis
     return result
 
 
+CAP_DIGIT_CHARS = set("零壹贰叁肆伍陆柒捌玖")
+
+
 def _draw_spaced_text(
     c: canvas.Canvas, x0: float, x1: float, y_top: float,
-    text: str, size: float, color: tuple[float, float, float],
+    text: str, size: float, digit_color: tuple[float, float, float],
 ) -> None:
-    """逐字均匀排布文本框（两端对齐），用于大写金额。"""
+    """逐字均匀排布文本框（两端对齐），数字用黑、单位用蓝。"""
 
     chars = list(text)
     n = len(chars)
+    unit_color = BLUE
     if n <= 1:
-        _text(c, x0, y_top, text, size, color)
+        ch = text
+        col = digit_color if ch in CAP_DIGIT_CHARS else unit_color
+        _text(c, x0, y_top, ch, size, col)
         return
     step = (x1 - x0) / (n - 1)
     for i, ch in enumerate(chars):
-        _text(c, x0 + i * step, y_top, ch, size, color, "center")
+        col = digit_color if ch in CAP_DIGIT_CHARS else unit_color
+        _text(c, x0 + i * step, y_top, ch, size, col, "center")
+
+
+
+
+def _draw_date_centered(
+    c: canvas.Canvas, center_x: float, y_top: float,
+    d: date, size: float,
+    digit_color: tuple[float, float, float],
+    unit_color: tuple[float, float, float],
+) -> None:
+    """绘制 YYYY年MM月DD日，数字黑、年月日蓝，整体居中于 center_x。"""
+
+    _register_font()
+    parts: list[tuple[str, tuple[float, float, float]]] = []
+    y, mo, day = f"{d.year}", f"{d.month:02d}", f"{d.day:02d}"
+    parts.append((y, digit_color))
+    parts.append(("年", unit_color))
+    parts.append((mo, digit_color))
+    parts.append(("月", unit_color))
+    parts.append((day, digit_color))
+    parts.append(("日", unit_color))
+    width = sum(pdfmetrics.stringWidth(s, FONT, size) for s, _ in parts)
+    x = center_x - width / 2
+    for s, col in parts:
+        c.setFont(FONT, size)
+        c.setFillColor(col)
+        c.drawString(x, PAGE_H - (y_top + size * TXT_MULT), s)
+        x += pdfmetrics.stringWidth(s, FONT, size)
 
 
 def _fit(text: str, max_w: float, size: float) -> str:
@@ -221,7 +257,7 @@ def render_reimbursement_form(r: Reimbursement, output_path: Path) -> Path:
     # ---- 表头信息行（标签蓝，值黑）----
     _text(c, 14.8, 124.2, "报销部门：", 6.6, BLUE)
     _text(c, 48.5, 124.2, r.department, 6.6, BLACK)
-    _text(c, 297.5, 124.2, r.created_at.strftime("%Y年%m月%d日"), 6.6, BLACK, "center")
+    _draw_date_centered(c, 297.5, 124.2, r.created_at, 6.6, BLACK, BLUE)
     pages_cn = "壹贰叁肆伍陆柒捌玖"[r.attachment_pages - 1]
     if not (1 <= r.attachment_pages <= 9):
         pages_cn = str(r.attachment_pages)
