@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import json as _json
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -56,6 +58,56 @@ def _parse_date(value: str | None) -> date | None:
         return None
 
 
+def _llm_recognize(image_path: Path) -> dict[str, Any] | None:
+    """调用 OpenRouter 视觉模型识别凭证；失败返回 None。"""
+
+    import os as _os
+    from pathlib import Path as _P
+
+    env_file = _P(__file__).resolve().parent.parent / ".env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                _os.environ.setdefault(k.strip(), v.strip())
+
+    key = _os.environ.get("DEEPSEEK_API_KEY", "")
+    model = _os.environ.get("DEEPSEEK_MODEL", "deepseek/deepseek-v4-flash-vision-exp")
+    base = _os.environ.get("DEEPSEEK_BASE_URL", "https://openrouter.ai/api/v1")
+    if not key:
+        return None
+    try:
+        import openai
+
+        data = base64.b64encode(image_path.read_bytes()).decode()
+        client = openai.OpenAI(api_key=key, base_url=base, timeout=120)
+        prompt = (
+            "You are an expense reimbursement assistant. Analyze this receipt "
+            "image and reply with ONLY a JSON object. Keys: project (one of "
+            "software-service/transport/accommodation/meal/office/travel/"
+            "communication/other), subject (one-line summary in Chinese), "
+            "remarks (currency/settlement), amount (numeric), date (YYYY-MM-DD), "
+            "merchant. Fill project based on the merchant/category."
+        )
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + data}},
+            ]}],
+            max_tokens=500,
+        )
+        txt = (resp.choices[0].message.content or "").strip()
+        s, e = txt.find("{"), txt.rfind("}")
+        if s == -1 or e <= s:
+            return None
+        obj = _json.loads(txt[s : e + 1])
+        return obj if isinstance(obj, dict) else None
+    except Exception:
+        return None
+
+
 def _int(value: str | None, default: int = 1) -> int:
     if value is None:
         return default
@@ -75,7 +127,7 @@ def index() -> str:
 
 @app.post("/preview")
 def preview() -> Any:
-    """上传图片后即时 OCR 识别，返回建议的项目/事由/备注等，供前端回填。"""
+    """上传图片后优先用视觉大模型识别，失败回退 OCR+规则，返回建议供前端回填。"""
 
     file = request.files.get("receipt")
     if not file or not file.filename:
@@ -84,32 +136,66 @@ def preview() -> Any:
     if ext not in ALLOWED_EXT:
         return {"error": "不支持的图片格式，请上传 jpg/png/bmp/webp 等图片。"}, 400
 
-    # 保存临时文件
     stem = Path(file.filename).stem.replace(" ", "_") or "preview"
     tmp_path = OUTPUT_DIR / f"{stem}_{_unix_ts()}{ext}"
     file.save(tmp_path)
 
-    try:
-        engine = get_engine()
-        text = engine.extract_text(tmp_path)
-    except Exception as exc:  # noqa: BLE001
-        return {"error": f"OCR 识别失败：{exc}. 请确认本机已安装 Tesseract OCR 及中文语言包。"}, 500
+    project = subject = remarks = ""
+    merchant = tax_id = ""
+    amount = "0"
+    date_str = ""
 
-    item, receipt_info = parse_receipt_text(text)
-    ai = summarize(text, receipt_info.merchant, item.amount)
-    date_str = item.date.isoformat() if item.date else ""
+    # 1) 先试视觉大模型
+    llm = _llm_recognize(tmp_path)
+    if llm:
+        project = _map_project(str(llm.get("project") or ""))
+        subject = str(llm.get("subject") or "")
+        remarks = str(llm.get("remarks") or "")
+        merchant = str(llm.get("merchant") or "")
+        amount = str(llm.get("amount") or "0")
+        date_str = str(llm.get("date") or "")
+        text = str(llm.get("subject") or "")
+    else:
+        # 2) 回退 OCR + 规则
+        try:
+            engine = get_engine()
+            text = engine.extract_text(tmp_path)
+        except Exception as exc:
+            return {"error": f"OCR 识别失败：{exc}. 请确认已安装 Tesseract OCR 及中文包。"}, 500
+        item, info = parse_receipt_text(text)
+        ai = summarize(text, info.merchant, item.amount)
+        project = _map_project(ai.get("project") or "")
+        subject = ai.get("subject") or ""
+        remarks = ai.get("remarks") or ""
+        merchant = info.merchant
+        amount = str(item.amount)
+        date_str = item.date.isoformat() if item.date else ""
 
     return {
-        "project": ai["project"],
-        "subject": ai["subject"],
-        "remarks": ai["remarks"],
-        "merchant": receipt_info.merchant,
-        "tax_id": receipt_info.tax_id,
-        "amount": str(item.amount),
+        "project": project,
+        "subject": subject,
+        "remarks": remarks,
+        "merchant": merchant,
+        "tax_id": tax_id,
+        "amount": amount,
         "date": date_str,
         "pages": 1,
+        "img": tmp_path.name,
         "extracted_text": text,
     }
+
+
+def _map_project(key: str) -> str:
+    mapping = {
+        "software-service": "软件服务费", "software": "软件服务费",
+        "transport": "交通费", "accommodation": "住宿费", "meal": "餐饮费",
+        "office": "办公费", "travel": "差旅费", "communication": "通讯费",
+        "other": "其他费用",
+        "软件服务费": "软件服务费", "交通费": "交通费", "住宿费": "住宿费",
+        "餐饮费": "餐饮费", "办公费": "办公费", "差旅费": "差旅费",
+        "通讯费": "通讯费", "其他费用": "其他费用",
+    }
+    return mapping.get(key.lower(), "其他费用")
 
 
 @app.post("/process")
@@ -130,18 +216,26 @@ def process() -> Any:
     if not rows:
         rows = [{} for _ in files]
 
-    # 保存所有上传图
+    # 用 rows 里的 img（已保存的凭证图路径）确定凭证图列表
     images: list[Path] = []
-    for f in files:
-        if not f or not f.filename:
-            continue
-        ext = Path(f.filename).suffix.lower()
-        if ext not in ALLOWED_EXT:
-            continue
-        stem = Path(f.filename).stem.replace(" ", "_") or "receipt"
-        img_path = OUTPUT_DIR / f"{stem}_{_unix_ts()}{ext}"
-        f.save(img_path)
-        images.append(img_path)
+    for row in rows:
+        img_name = row.get("img") or ""
+        if img_name:
+            img_path = OUTPUT_DIR / img_name
+            if img_path.exists():
+                images.append(img_path)
+    # 兜底：若 rows 没带 img，回退到前端上传的文件
+    if not images:
+        for f in files:
+            if not f or not f.filename:
+                continue
+            ext = Path(f.filename).suffix.lower()
+            if ext not in ALLOWED_EXT:
+                continue
+            stem = Path(f.filename).stem.replace(" ", "_") or "receipt"
+            ip = OUTPUT_DIR / f"{stem}_{_unix_ts()}{ext}"
+            f.save(ip)
+            images.append(ip)
 
     applicant = (request.form.get("applicant") or "").strip()
     department = (request.form.get("department") or "").strip()

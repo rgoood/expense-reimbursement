@@ -70,7 +70,6 @@
         <div class="field"><label>报销部门</label><input name="department" id="deptInput" placeholder="如：运营八部"></div>
         <div class="field"><label>报销人</label><input name="reimburser" placeholder="默认 陈兴华"></div>
         <div class="field"><label>报销日期（默认今天）</label><input name="date" type="date" id="reimbDate"></div>
-        <div class="field"><label>支付方式</label><input name="payment_method" placeholder="如：支付宝 / 现金 / 银行转账"></div>
       </div>
 
       <table class="rows">
@@ -124,6 +123,7 @@
           if (data.error){ status.textContent = data.error; return; }
           ROWS.push({
             name: file.name,
+            img: data.img || '',
             project: data.project || '',
             subject: data.subject || (data.merchant || ''),
             remarks: data.remarks || '',
