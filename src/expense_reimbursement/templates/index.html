@@ -22,7 +22,7 @@
     #recoStatus { margin-top:10px; color:#27a763; font-size:13px; }
     .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 18px; }
     .field label { display:block; font-size:13px; color:#51617c; margin-bottom:5px; }
-    .field input { width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:7px; font-size:14px; }
+    .field input, .field select { width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:7px; font-size:14px; background:#fff; }
     .field input:focus { outline:none; border-color:var(--blue); }
     .full { grid-column:1 / -1; }
     .btn { display:block; width:100%; padding:13px; background:var(--blue); color:#fff; border:none; border-radius:9px; font-size:16px; cursor:pointer; margin-top:4px; }
@@ -70,6 +70,9 @@
         <div class="field"><label>报销部门</label><input name="department" id="deptInput" value="运营八部" placeholder="如：运营八部"></div>
         <div class="field"><label>报销人</label><input name="reimburser" value="陈兴华" placeholder="默认 陈兴华"></div>
         <div class="field"><label>报销日期（默认今天）</label><input name="date" type="date" id="reimbDate"></div>
+        <div class="field"><label>支付方式</label><select name="payment_method" id="pmSelect">
+          {% for pm in payments %}{% if pm != "其他" %}<option value="{{ pm }}"{% if pm == "银行转账" %} selected{% endif %}>{{ pm }}</option>{% endif %}{% endfor %}
+        </select></div>
         <div class="field full"><label>备注（整单，可选）</label><input name="remarks" id="reimbRemarks" placeholder="如：本次出差住宿费，含两晚；发票已验真"></div>
       </div>
 
@@ -113,13 +116,11 @@
       const dept = document.getElementById('deptInput');
       const reim = document.querySelector('input[name="reimburser"]');
       const dt = document.getElementById('reimbDate');
-      const rem = document.getElementById('reimbRemarks');
       localStorage.setItem(STATE_KEY, JSON.stringify({
         rows: ROWS,
         department: dept ? dept.value : '',
         reimburser: reim ? reim.value : '',
-        date: dt ? dt.value : '',
-        remarks: rem ? rem.value : ''
+        date: dt ? dt.value : ''
       }));
     } catch(e){}
   }
@@ -132,11 +133,9 @@
       const dept = document.getElementById('deptInput');
       const reim = document.querySelector('input[name="reimburser"]');
       const dt = document.getElementById('reimbDate');
-      const rem = document.getElementById('reimbRemarks');
       if (dept && st.department) dept.value = st.department;
       if (reim && st.reimburser) reim.value = st.reimburser;
       if (dt && st.date) dt.value = st.date;
-      if (rem && st.remarks) rem.value = st.remarks;
       if (ROWS.length) renderRows();
     } catch(e){}
   }
@@ -223,7 +222,7 @@
   drop.addEventListener('dragleave', () => drop.classList.remove('over'));
   drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer.files); });
   fileInput.addEventListener('change', e => { addFiles(e.target.files); fileInput.value=''; });
-  ['deptInput','reimbDate','reimbRemarks'].forEach(id => {
+  ['deptInput','reimbDate'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', saveState);
   });

@@ -392,6 +392,12 @@ def render_reimbursement_form(r: Reimbursement, output_path: Path) -> Path:
     return output_path
 
 
+# 凭证页图片内容区（标题与摘要之间，reportlab 左下原点 y）
+REC_TOP = PAGE_H - 66      # 图片允许的最高底部坐标
+REC_BOTTOM = 86            # 图片允许的最低底部坐标
+REC_AVAIL = REC_TOP - REC_BOTTOM  # 可用垂直高度
+
+
 def render_receipt(
     image_path: Path | None, output_path: Path, summary: str = ""
 ) -> Path:
@@ -405,11 +411,12 @@ def render_receipt(
 
         with Image.open(image_path) as img:
             iw, ih = img.size
-        maxw, maxh = PAGE_W - 40, PAGE_H - 140
+        maxw, maxh = PAGE_W - 40, REC_AVAIL
         ratio = min(maxw / iw, maxh / ih)
         dw, dh = iw * ratio, ih * ratio
         cx = (PAGE_W - dw) / 2
-        c.drawImage(str(image_path), cx, 50, width=dw, height=dh, preserveAspectRatio=True)
+        cy = REC_BOTTOM + (REC_AVAIL - dh) / 2
+        c.drawImage(str(image_path), cx, cy, width=dw, height=dh, preserveAspectRatio=True)
         if summary:
             _text(c, PAGE_W / 2, 40, "识别摘要：" + summary, 8, BLUE, "center")
     else:
@@ -435,11 +442,12 @@ def render_receipts(
 
             with Image.open(image) as img:
                 iw, ih = img.size
-            maxw, maxh = PAGE_W - 40, PAGE_H - 140
+            maxw, maxh = PAGE_W - 40, REC_AVAIL
             ratio = min(maxw / iw, maxh / ih)
             dw, dh = iw * ratio, ih * ratio
             cx = (PAGE_W - dw) / 2
-            c.drawImage(str(image), cx, 50, width=dw, height=dh, preserveAspectRatio=True)
+            cy = REC_BOTTOM + (REC_AVAIL - dh) / 2
+            c.drawImage(str(image), cx, cy, width=dw, height=dh, preserveAspectRatio=True)
             if idx < len(summaries) and summaries[idx]:
                 _text(c, PAGE_W / 2, 40, "识别摘要：" + summaries[idx], 8, BLUE, "center")
         else:

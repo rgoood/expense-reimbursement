@@ -34,7 +34,7 @@ ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".gif"}
 
 
 def _payments() -> list[str]:
-    return [pm.value for pm in PaymentMethod]
+    return [pm.value for pm in PaymentMethod if pm is not PaymentMethod.OTHER]
 
 
 def _dec(value: str | None) -> Decimal:
@@ -267,7 +267,7 @@ def process() -> Any:
     cashier = (request.form.get("cashier") or "").strip()
     date_value = _parse_date(request.form.get("date"))
     remarks = (request.form.get("remarks") or "").strip()
-    pm_raw = (request.form.get("payment_method") or "其他").strip()
+    pm_raw = (request.form.get("payment_method") or "银行转账").strip()
     try:
         payment_method = PaymentMethod(pm_raw)
     except ValueError:
