@@ -45,3 +45,21 @@ def test_split_amount_digits() -> None:
     assert _split_amount_digits(Decimal("2000")) == ["0", "0", "0", "2", "0", "0", "0", "0", "0"]
     assert _split_amount_digits(Decimal("711.40")) == ["0", "0", "0", "0", "7", "1", "1", "4", "0"]
     assert _split_amount_digits(Decimal("12.34")) == ["0", "0", "0", "0", "0", "1", "2", "3", "4"]
+
+
+def test_font_fallback_to_cid_when_kaiti_missing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """系统无楷体时应回退到内置 CID 宋体，仍能生成 PDF。"""
+
+    import expense_reimbursement.render as render_mod
+
+    monkeypatch.setattr(render_mod, "FONT_PATH", "C:/no/such/kaiti.ttf")
+    monkeypatch.setattr(render_mod, "FONT", "KaiTi")
+    r = Reimbursement(
+        applicant="张三", items=[ExpenseItem(description="打车", amount=Decimal("50.00"))]
+    )
+    out = tmp_path / "fallback.pdf"
+    render_reimbursement_form(r, out)
+    assert out.exists()
+    assert out.stat().st_size > 0

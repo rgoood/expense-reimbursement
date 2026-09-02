@@ -16,6 +16,7 @@ from expense_reimbursement.models import Reimbursement
 PAGE_W, PAGE_H = A5[1], A5[0]
 FONT = "KaiTi"
 FONT_PATH = "C:/Windows/Fonts/simkai.ttf"
+FALLBACK_FONT = "STSong-Light"
 BLUE = (0.04, 0.32, 0.6)
 
 # 模板列坐标（pt，页面从顶部数起，绘制时用 ty 转换）
@@ -47,12 +48,25 @@ def ty(y_top: float) -> float:
 
 
 def _register_font() -> None:
-    """注册楷体字体。"""
+    """注册楷体字体；找不到系统楷体则回退到内置 CID 宋体。"""
 
+    global FONT
     try:
         pdfmetrics.getFont(FONT)
+        return
     except KeyError:
+        pass
+    try:
         pdfmetrics.registerFont(TTFont(FONT, FONT_PATH))
+        pdfmetrics.getFont(FONT)
+    except Exception:
+        FONT = FALLBACK_FONT
+        try:
+            pdfmetrics.getFont(FONT)
+        except KeyError:
+            from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+            pdfmetrics.registerFont(UnicodeCIDFont(FONT))
 
 
 def _split_amount_digits(value: Decimal) -> list[str]:
