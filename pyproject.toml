@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "expense-reimbursement"
-version = "0.2.0"
+version = "0.2.1"
 description = "Upload a receipt image, auto-extract the content, and generate A5 PDF reimbursement form + receipt."
 readme = "README.md"
 license = { text = "MIT" }
@@ -25,6 +25,7 @@ dependencies = [
     "reportlab>=4.1",
     "Pillow>=10.0",
     "python-dateutil>=2.8",
+    "pymupdf>=1.24",
 ]
 
 [project.optional-dependencies]
