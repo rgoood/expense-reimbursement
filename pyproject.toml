@@ -36,6 +36,7 @@ dev = [
     "mypy>=1.10",
     "build>=1.0",
     "types-reportlab>=4.5",
+    "PyPDF>=4.0",
 ]
 
 [project.scripts]

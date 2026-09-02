@@ -28,12 +28,11 @@ def test_a5_landscape_size(tmp_path: Path) -> None:
     r = Reimbursement(applicant="张三", items=[ExpenseItem(description="打车", amount=D("50.00"))])
     out = tmp_path / "landscape.pdf"
     render_reimbursement_form(r, out)
-    from pymupdf import open as pdfopen
+    from pypdf import PdfReader
 
-    doc = pdfopen(str(out))
-    page = doc[0]
-    width_mm = page.rect.width / 72 * 25.4
-    height_mm = page.rect.height / 72 * 25.4
+    page = PdfReader(str(out)).pages[0]
+    width_mm = float(page.mediabox.width) / 72 * 25.4
+    height_mm = float(page.mediabox.height) / 72 * 25.4
     assert round(width_mm, 0) == 210
     assert round(height_mm, 0) == 148
     assert width_mm > height_mm  # 横向
