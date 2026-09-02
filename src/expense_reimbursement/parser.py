@@ -76,14 +76,51 @@ def _categorize(text: str) -> Category:
     return Category.OTHER
 
 
+def _is_noise_line(line: str) -> bool:
+    """判断是否为手机状态栏/UI 杂讯行（非凭证业务内容）。"""
+
+    import re as _re
+    if not line:
+        return True
+    # 状态栏时间
+    if _re.match(r"^\d{1,2}:\d{2}$", line):
+        return True
+    # 纯符号/无意义英文（如 OQ tu > Eb），长度短且基本无字母正文
+    no_text = _re.sub(r"[^A-Za-z0-9\u4e00-\u9fa5]", "", line)
+    if len(no_text) <= 2:
+        return True
+    # UI 文案
+    ui_words = ("交易详情", "已入账", "我要分期", "对此交易有疑问", "消费", "退款", "支付")
+    if line in ui_words:
+        return True
+    return False
+
+
+def _extract_txn_merchant(text: str) -> str:
+    """从交易摘要行提取商户，如 '(消费) OPENROUTER, INC'。"""
+
+    txn_pattern = re.compile(
+        r"[（(]\s*(?:消费|退款|支付|转账)\s*[)）]\s*([A-Za-z0-9][A-Za-z0-9.,&\-\s]{1,30})"
+    )
+    for line in text.splitlines():
+        match = txn_pattern.search(line.strip())
+        if match:
+            return match.group(1).strip()
+    return ""
+
+
 def _extract_merchant(text: str) -> str:
-    """抽取商户/公司名（优先收票主体，其次购方，再次独立行/中文词组）。"""
+    """抽取商户/公司名（交易摘要 > 收票主体 > 购方 > 独立行 > 中文词组）。"""
 
     lines = [line.strip() for line in text.splitlines() if line.strip()]
+    # 0) 交易摘要优先（手机银行/支付截图常见）
+    txn = _extract_txn_merchant(text)
+    if txn:
+        return txn
+    # 1) 优先销售方/收款方/商户等收票主体
     seller_pattern = re.compile(
         r"(?:销售方名称|收款方名称|收款方|收款单位|商户名称|商户|付款方名称|公司名称)\s*[:：]?\s*([^\s:：]{2,30})"
     )
-    # 1) 优先销售方/收款方/商户等收票主体
     for line in lines:
         match = seller_pattern.search(line)
         if match:
@@ -94,13 +131,13 @@ def _extract_merchant(text: str) -> str:
         match = buyer_pattern.search(line)
         if match:
             return match.group(1).strip()
-    # 3) 排除发票/收据标题行与字段行
+    # 3) 排除发票/收据标题行与字段行、状态栏杂讯
     title_words = (
         "增值税", "电子发票", "普通发票", "专用发票", "收据", "小票", "发票号码", "发票代码"
     )
     skip_prefixes = (
         "收款", "付款", "纳税人", "订单", "金额", "日期", "单号", "代码", "备注", "合计",
-        "价税", "购买方", "销售方",
+        "价税", "购买方", "销售方", "交易日期", "交易金额", "入账", "交易卡号",
     )
     candidates = [
         line
@@ -111,12 +148,13 @@ def _extract_merchant(text: str) -> str:
         and "日" not in line
         and not any(word in line for word in title_words)
         and not any(line.startswith(prefix) for prefix in skip_prefixes)
+        and not _is_noise_line(line)
         and len(line) >= 2
     ]
     if candidates:
         return candidates[0]
     # 4) 兜底：抽取第一个连续中文词组
-    cn_pattern = re.compile(r"[\u4e00-\u9fa5]{2,12}")
+    cn_pattern = re.compile(r"[\u4e00-\u9fa5A-Za-z0-9.,&\-]{2,30}")
     for line in lines:
         if any(word in line for word in title_words):
             continue

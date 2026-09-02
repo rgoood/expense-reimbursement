@@ -63,3 +63,30 @@ def test_invoice_category_hotel() -> None:
     text = "差旅住宿费\n金额: ￥1280.50\n日期: 2026年09月02日"
     item, _ = parse_receipt_text(text)
     assert item.category == Category.ACCOMMODATION
+
+
+def test_extract_merchant_from_txn_screenshot() -> None:
+    text = (
+        "10:43     OQ tu > Eb\n"
+        "<  交易详情\n"
+        "(消费) OPENROUTER, INC\n"
+        "¥ 711.40\n"
+        "交易日期        2026/08/30 13:17:40\n"
+        "交易金额        105.50\n"
+        "交易货币        美元\n"
+        "入账日期        2026/08/30\n"
+        "入账金额        711.40\n"
+        "入账货币        人民币\n"
+        "交易卡号    广发万事达至享白.(4759)"
+    )
+    item, receipt = parse_receipt_text(text)
+    assert receipt.merchant == "OPENROUTER, INC"
+    assert item.amount == Decimal("711.40")
+    assert item.date is not None and item.date.isoformat() == "2026-08-30"
+
+
+def test_ignore_status_bar_noise() -> None:
+    text = "10:43   OQ tu > Eb\n(消费) STARBUCKS COFFEE\n入账金额 45.00"
+    item, receipt = parse_receipt_text(text)
+    assert receipt.merchant == "STARBUCKS COFFEE"
+    assert item.amount == Decimal("45.00")
