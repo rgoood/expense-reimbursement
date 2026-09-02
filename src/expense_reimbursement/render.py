@@ -338,11 +338,13 @@ def render_reimbursement_form(r: Reimbursement, output_path: Path) -> Path:
     cap = _capital_text(r.total)
     _draw_spaced_text(c, 70.5, 302.3, 291.9, cap, 8.2, BLACK)   # 逐字均匀铺满框，避让左线
     _text(c, 322.4, 291.9, "原借款：", 6.6, BLUE)
-    loan = str(r.original_loan) if r.original_loan else ""
-    _text(c, 349.0, 291.9, loan, 6.6, BLACK)
+    if r.original_loan:
+        _text(c, 349.0, 291.9, str(r.original_loan), 6.6, BLACK)
+    _text(c, 421.0, 291.9, "元", 6.6, BLUE)
     _text(c, 451.2, 291.9, "应退（补）款：", 6.6, BLUE)
-    refund = str(r.refund) if r.refund else ""
-    _text(c, 500.0, 291.9, refund, 6.6, BLACK)
+    if r.refund:
+        _text(c, 500.0, 291.9, str(r.refund), 6.6, BLACK)
+    _text(c, 560.0, 291.9, "元", 6.6, BLUE)
 
     # ---- 签字栏（只留标签，不填人员）----
     _text(c, 24.2, 310.4, "会计主管", 7.7, BLUE)
