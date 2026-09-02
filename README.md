@@ -46,6 +46,24 @@ expense-reimbursement process receipt.png --output output/
 - `output/reimbursement_form.pdf`
 - `output/receipt.pdf`
 
+
+## Web 上传界面
+
+除命令行外，可启动一个网页来上传票据：
+
+```bash
+# 安装 web 依赖
+pip install -e ".[web]"
+
+# 启动（默认 127.0.0.1:5000）
+expense-reimbursement web --host 127.0.0.1 --port 5000
+```
+
+打开浏览器访问 `http://127.0.0.1:5000`，拖拽/选择一张票据图片，填写（可选）部门、报销人、报销项目、备注等，点击「生成报销单」。网页会显示识别出的字段并预览/下载两份 A5 PDF。
+
+- 黑色文字 = 从票据识别的值，可在网页上修改
+- 蓝色文字 = 模板固定标签，不可改
+
 ## 架构
 
 处理管线为四段式流水线，详见 `docs/architecture.md`：

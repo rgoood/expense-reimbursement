@@ -47,6 +47,11 @@ def _build_parser() -> argparse.ArgumentParser:
     proc.add_argument("--cashier", default="", help="出纳。")
     proc.add_argument("--loan", default="0", help="原借款金额。")
     proc.add_argument("--refund", default="0", help="应退（补）款金额。")
+
+    web = sub.add_parser("web", help="启动 Web 上传界面（拖拽图片自动生成 A5 报销单）。")
+    web.add_argument("--host", default="127.0.0.1", help="监听地址，默认 127.0.0.1。")
+    web.add_argument("--port", type=int, default=5000, help="端口，默认 5000。")
+    web.add_argument("--debug", action="store_true", help="调试模式。")
     return parser
 
 
@@ -76,6 +81,12 @@ def app(argv: Sequence[str] | None = None) -> int:
         receipt_path = render_receipt(sample_img, output / "receipt.pdf", summary="示例凭证")
         print(f"已生成报销单：{form_path}")
         print(f"已生成凭证：{receipt_path}")
+        return 0
+
+    if args.command == "web":
+        from expense_reimbursement import run_web
+
+        run_web(host=args.host, port=args.port, debug=args.debug)
         return 0
 
     if args.command == "process":

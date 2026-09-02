@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>生成完成 - 费用报销单</title>
+  <style>
+    :root { --blue:#316FD9; --blue2:#1e4fae; --bg:#f5f7fb; --line:#dce3f0; --ink:#0d0d0d; }
+    * { box-sizing:border-box; }
+    body { font-family:"Microsoft YaHei","PingFang SC",sans-serif; background:var(--bg); margin:0; color:var(--ink); }
+    .wrap { max-width:1100px; margin:0 auto; padding:28px 20px 60px; }
+    h1 { text-align:center; letter-spacing:14px; color:var(--blue2); margin:6px 0 2px; }
+    .sub { text-align:center; color:#8a97ad; font-size:13px; margin-bottom:22px; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,.04); }
+    .card h2 { font-size:16px; color:var(--blue2); margin:0 0 12px; border-left:4px solid var(--blue); padding-left:10px; }
+    .actions { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin:18px 0; }
+    .btn { padding:11px 22px; border-radius:8px; text-decoration:none; color:#fff; font-size:15px; }
+    .btn:hover { opacity:.9; }
+    .b-blue { background:var(--blue); }
+    .b-green { background:#27a763; }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    td,th { border:1px solid var(--line); padding:8px 10px; text-align:left; }
+    th { background:#f0f4fb; color:var(--blue2); width:34%; }
+    .pdfs { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+    .pdf { border:1px solid var(--line); border-radius:10px; overflow:hidden; background:#fff; }
+    .pdf h3 { font-size:13px; text-align:center; color:var(--blue2); margin:10px 0; }
+    .pdf iframe { width:100%; height:520px; border:0; }
+    .ocr { white-space:pre-wrap; font-size:13px; color:#42526b; background:#fbfcff; border:1px solid var(--line); border-radius:8px; padding:12px; max-height:220px; overflow:auto; }
+    .back { text-align:center; margin-top:16px; }
+    .back a { color:var(--blue2); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>报销单已生成</h1>
+  <div class="sub">A5 规格 · 报销单 + 报销凭证</div>
+
+  <div class="actions">
+    <a class="btn b-blue" href="{{ form_url }}" download>下载报销单 PDF</a>
+    <a class="btn b-green" href="{{ receipt_url }}" download>下载凭证 PDF</a>
+  </div>
+
+  <div class="card">
+    <h2>识别结果</h2>
+    <table>
+      <tr><th>商户 / 摘要</th><td>{{ merchant or reimb_info.subject or '—' }}</td></tr>
+      <tr><th>报销部门</th><td>{{ reimb_info.department or '—' }}</td></tr>
+      <tr><th>报销项目</th><td>{{ reimb_info.subject or '—' }}</td></tr>
+      <tr><th>合计金额</th><td>¥ {{ total }}</td></tr>
+      <tr><th>支付方式</th><td>{{ reimb_info.payment_method or '—' }}</td></tr>
+      <tr><th>报销人</th><td>{{ reimb_info.reimburser or '陈兴华' }}</td></tr>
+      <tr><th>单据及附件</th><td>{{ reimb_info.attachment_pages }} 页</td></tr>
+      <tr><th>税号</th><td>{{ tax_id or '—' }}</td></tr>
+      <tr><th>订单号</th><td>{{ order_no or '—' }}</td></tr>
+      <tr><th>备注</th><td>{{ reimb_info.remarks or '—' }}</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>生成文件（A5 横向 210×148mm）</h2>
+    <div class="pdfs">
+      <div class="pdf"><h3>费用报销单</h3><iframe src="{{ form_url }}"></iframe></div>
+      <div class="pdf"><h3>报销凭证</h3><iframe src="{{ receipt_url }}"></iframe></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>OCR 原文</h2>
+    <div class="ocr">{{ extracted_text }}</div>
+  </div>
+
+  <div class="back"><a href="{{ url_for('index') }}">← 返回继续上传</a></div>
+</div>
+</body>
+</html>

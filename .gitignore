@@ -37,3 +37,7 @@ output/
 
 # Local test assets
 sample/
+
+
+# Web runtime outputs
+src/expense_reimbursement/static/outputs/
