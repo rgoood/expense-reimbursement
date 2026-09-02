@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
+from decimal import Decimal
 from pathlib import Path
 
 from expense_reimbursement.models import PaymentMethod
@@ -38,6 +39,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="支付方式。",
     )
     proc.add_argument("--remarks", default="", help="备注。")
+    proc.add_argument("--reimburser", default="", help="报销人（签字）。")
+    proc.add_argument("--pages", type=int, default=1, help="单据及附件共几页。")
+    proc.add_argument("--project", default="", help="报销项目（如 差旅费/供应商货款）。")
+    proc.add_argument("--supervisor", default="", help="会计主管。")
+    proc.add_argument("--reviewer", default="", help="复核。")
+    proc.add_argument("--cashier", default="", help="出纳。")
+    proc.add_argument("--loan", default="0", help="原借款金额。")
+    proc.add_argument("--refund", default="0", help="应退（补）款金额。")
     return parser
 
 
@@ -82,6 +91,14 @@ def app(argv: Sequence[str] | None = None) -> int:
             subject=args.subject,
             payment_method=payment,
             remarks=args.remarks,
+            attachment_pages=args.pages,
+            project=args.project,
+            reimburser=args.reimburser,
+            accounting_supervisor=args.supervisor,
+            reviewer=args.reviewer,
+            cashier=args.cashier,
+            original_loan=Decimal(args.loan),
+            refund=Decimal(args.refund),
         )
         print(f"识别文本：{result.extracted_text[:120]}")
         print(f"报销单：{result.form_path}")

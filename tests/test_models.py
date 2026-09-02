@@ -35,3 +35,12 @@ def test_payment_method_value() -> None:
 
 def test_category_value() -> None:
     assert Category.MEAL.value == "餐饮"
+
+
+def test_amount_to_chinese() -> None:
+    from expense_reimbursement.models import amount_to_chinese
+
+    assert amount_to_chinese(Decimal("2000")) == "贰仟元整"
+    assert amount_to_chinese(Decimal("711.40")) == "柒佰壹拾壹元肆角"
+    assert amount_to_chinese(Decimal("100.05")) == "壹佰元零伍分"
+    assert amount_to_chinese(Decimal("0")) == "零元整"

@@ -40,6 +40,14 @@ def process_receipt(
     subject: str = "",
     payment_method: PaymentMethod = PaymentMethod.OTHER,
     remarks: str = "",
+    attachment_pages: int = 1,
+    project: str = "",
+    reimburser: str = "",
+    accounting_supervisor: str = "",
+    reviewer: str = "",
+    cashier: str = "",
+    original_loan: Decimal = Decimal("0"),
+    refund: Decimal = Decimal("0"),
 ) -> ReceiptResult:
     """处理一张凭证并输出两张 A5 PDF。"""
 
@@ -50,6 +58,8 @@ def process_receipt(
     ocr_engine = engine or get_engine()
     text = ocr_engine.extract_text(image_path)
     item, receipt_info = parse_receipt_text(text)
+    item.project = project or item.category.value
+    item.description = item.description or receipt_info.merchant
 
     reimbursement = Reimbursement(
         applicant=applicant,
@@ -57,8 +67,15 @@ def process_receipt(
         subject=subject or receipt_info.merchant,
         payment_method=payment_method,
         items=[item],
-        remarks=remarks,
+        remarks=remarks or item.remarks,
         created_at=datetime.now(),
+        attachment_pages=attachment_pages,
+        original_loan=original_loan,
+        refund=refund,
+        accounting_supervisor=accounting_supervisor,
+        reviewer=reviewer,
+        cashier=cashier,
+        reimburser=reimburser or applicant,
     )
 
     stem = image_path.stem
@@ -81,12 +98,14 @@ def sample_reimbursement() -> Reimbursement:
     """构建一个内置样例报销单（用于 demo，无需 OCR）。"""
 
     item = ExpenseItem(
+        project="交通费",
         description="滴滴出行-客户拜访",
         amount=Decimal("156.80"),
         category=Category.TRANSPORT,
         date=date(2026, 9, 1),
     )
     item2 = ExpenseItem(
+        project="餐饮费",
         description="午餐-商务宴请",
         amount=Decimal("320.00"),
         category=Category.MEAL,
@@ -99,4 +118,9 @@ def sample_reimbursement() -> Reimbursement:
         payment_method=PaymentMethod.ALIPAY,
         items=[item, item2],
         remarks="已按规定提交凭证。",
+        attachment_pages=2,
+        reimburser="张三",
+        accounting_supervisor="李四",
+        reviewer="王五",
+        cashier="赵六",
     )
