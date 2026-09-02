@@ -94,7 +94,7 @@ Y_CAP = 302.0       # 金额大写顶
 Y_SIGN = 319.0      # 签字栏
 
 # 模板文字 bbox 顶部 y（用于基线对齐，size*0.8 偏移）
-TXT_MULT = 0.82
+TXT_MULT = 0.745
 
 
 def _amt_cx(i: int) -> float:
@@ -161,89 +161,85 @@ def _fit(text: str, max_w: float, size: float) -> str:
 
 
 def render_reimbursement_form(r: Reimbursement, output_path: Path) -> Path:
-    """生成 A5 横向财务报销单（复刻模板版式）。"""
+    """生成 A5 横向财务报销单（精确复刻模板）。"""
 
     _register_font()
     c = canvas.Canvas(str(output_path), pagesize=(PAGE_W, PAGE_H))
     c.setLineWidth(0.6)
     c.setStrokeColor(BLUE)
 
-    # ---- 标题 ----
-    _text(c, PAGE_W / 2, Y_TITLE, "费   用   报   销   单", 15.4, BLUE, "center")
-    _line(c, 144.8, Y_UNDERLINE, 380.1, Y_UNDERLINE, 1.0)
+    # ---- 标题 (居中, y=101.3) ----
+    _text(c, PAGE_W / 2, 101.3, "费   用   报   销   单", 15.4, BLUE, "center")
+    _line(c, 144.8, 117.0, 380.1, 117.0, 1.0)
 
-    # ---- 表头信息行 ----
-    _text(c, LX + 1, Y_TOP + 5, "报销部门：" + (r.department or ""), 6.6)
-    _text(c, 239, Y_TOP + 5, r.created_at.strftime("%Y年%m月%d日"), 6.6)
+    # ---- 表头信息行 (y=124.2) ----
+    _text(c, 14.8, 124.2, "报销部门：" + (r.department or ""), 6.6)
+    _text(c, 239.1, 124.2, r.created_at.strftime("%Y年%m月%d日"), 6.6)
     pages_cn = "壹贰叁肆伍陆柒捌玖"[r.attachment_pages - 1]
     if not (1 <= r.attachment_pages <= 9):
         pages_cn = str(r.attachment_pages)
-    _text(c, 453.7, Y_TOP + 5, f"单据及附件共 {pages_cn} 页", 6.6)
+    _text(c, 453.7, 124.2, f"单据及附件共 {pages_cn} 页", 6.6)
 
     # ---- 表格外框 ----
     c.rect(LX, ty(Y_CAP + 4.8), RX - LX, (Y_CAP + 4.8) - Y_TOP)
 
-    # ---- 列表头 ----
-    _text(c, (LX + X_PROJ_R) / 2, Y_HDR + 1, "报销项目", 7.7, BLUE, "center")
-    _text(c, (X_PROJ_R + X_SUMM_R) / 2, Y_HDR + 1, "摘要", 7.7, BLUE, "center")
-    _text(c, (X_AMT_L + X_AMT_R) / 2, Y_TOP + 2, "金额", 7.7, BLUE, "center")
-    # 竖排备注
-    _text(c, (X_AMT_R + X_NOTE_R) / 2, Y_HDR + 4, "备", 7.7, BLUE, "center")
-    _text(c, (X_AMT_R + X_NOTE_R) / 2, Y_HDR + 30, "注", 7.7, BLUE, "center")
-    # 竖排领导审批
-    for k, ch in enumerate("领导审批"):
-        _text(c, (X_NOTE_R + RX) / 2, 225 + k * 10, ch, 7.7, BLUE, "center")
+    # ---- 列表头 (y=141.2) ----
+    _text(c, 50.4, 141.2, "报销项目", 7.7, BLUE)
+    _text(c, 207.7, 141.2, "摘要", 7.7, BLUE)
+    _text(c, 365.7, 135.5, "金额", 7.7, BLUE)
 
-    # ---- 金额分列表头 ----
+    # ---- 金额分列表头 (y=148.2) ----
     for i, unit in enumerate(AMT_UNITS):
-        _text(c, _amt_cx(i), Y_HDR + 3, unit, 5.6, BLUE, "center")
+        _text(c, _amt_cx(i), 148.2, unit, 5.6, BLUE, "center")
 
     # ---- 金额分列边框 ----
     c.rect(X_AMT_L, ty(Y_TOTAL), X_AMT_R - X_AMT_L, Y_TOTAL - Y_HDR)
     for x in AMT_COLS:
         _line(c, x, Y_HDR, x, Y_TOTAL)
 
-    # ---- 明细行 ----
+    # ---- 竖排备注/领导审批 ----
+    _text(c, 439.4, 149.9, "备", 7.7, BLUE)
+    _text(c, 439.4, 180.1, "注", 7.7, BLUE)
+    for k, ch in enumerate("领导审批"):
+        _text(c, 439.4, 225.1 + k * 10.0, ch, 7.7, BLUE)
+
+    # ---- 明细行 (首行 y=160.8, 每行 +16) ----
     for row_idx, item in enumerate(r.items):
-        y = Y_ROW0 + row_idx * ROW_H
-        _text(c, LX + 4, y, _fit(item.project or "", X_PROJ_R - LX - 8, 6.6), 6.6)
-        _text(c, X_PROJ_R + 4, y, _fit(item.description or "", X_SUMM_R - X_PROJ_R - 8, 6.6), 6.6)
-        _print_amount_split(c, _split_amount_digits(item.amount), y)
-        _text(c, X_AMT_R + 3, y, _fit(item.remarks or "", RX - X_AMT_R - 6, 6.6), 6.6)
+        y = 160.8 + row_idx * ROW_H
+        _text(c, 49.6, y, _fit(item.project or "", 56, 6.6), 6.6)
+        _text(c, 144.5, y, _fit(item.description or "", X_SUMM_R - 144.5 - 4, 6.6), 6.6)
+        _print_amount_split(c, _split_amount_digits(item.amount), y - 1)
+        _text(c, 434.8 + 3, y, _fit(item.remarks or "", RX - 434.8 - 6, 6.6), 6.6)
 
     # ---- 明细行线 ----
-    y = Y_ROW0
-    for _ in range(8):
-        _line(c, LX, y, X_AMT_R, y)
-        if y + ROW_H >= Y_TOTAL:
+    for k in range(9):
+        yy = 156.3 + k * 16.0
+        if yy > Y_TOTAL:
             break
-        y += ROW_H
-    # 明细区竖线
-    for x in (X_PROJ_R, X_SUMM_R, X_NOTE_R, RX):
+        _line(c, LX, yy, X_AMT_R, yy)
+    for x in (X_PROJ_R, X_SUMM_R, X_AMT_R, X_NOTE_R, RX):
         _line(c, x, Y_HDR, x, Y_TOTAL)
-    _line(c, X_AMT_R, Y_HDR, X_AMT_R, Y_TOTAL)
 
-    # ---- 合计行 ----
+    # ---- 合计行 (y=272.8) ----
     _line(c, LX, Y_TOTAL, RX, Y_TOTAL)
-    _text(c, (X_PROJ_R + X_SUMM_R) / 2, Y_TOTAL + 5, "合计", 6.6, BLUE, "center")
-    _print_amount_split(c, _split_amount_digits(r.total), Y_TOTAL + 5)
+    _text(c, 156.2, 272.8, "合计", 6.6, BLUE)
+    _print_amount_split(c, _split_amount_digits(r.total), 272.8 - 1)
 
-    # ---- 金额大写区 ----
+    # ---- 金额大写 (y=291.9) ----
     _line(c, LX, Y_CAP, RX, Y_CAP)
-    _text(c, LX + 10, Y_CAP - 5, "金额", 7.7, BLUE)
-    _text(c, LX + 6, Y_CAP + 3, "（大写）", 7.7, BLUE)
-    _text(c, 67, Y_CAP - 2, "佰 仟 万 仟 佰 拾 元 角 分", 7.7, BLUE)
+    _text(c, 24.2, 285.8, "金额", 7.7, BLUE)
+    _text(c, 24.2, 296.9, "（大写）", 7.7, BLUE)
     cap = _capital_text(r.total)
-    _text(c, 67, Y_CAP + 5, cap, 8.2, BLUE)
-    _text(c, 322.4, Y_CAP - 2, f"原借款：{r.original_loan} 元", 6.6, BLUE)
-    _text(c, 451.2, Y_CAP - 2, f"应退（补）款：{r.refund} 元", 6.6, BLUE)
+    _text(c, 67.6, 291.9, cap, 8.2, BLUE)
+    _text(c, 322.4, 291.9, f"原借款：{r.original_loan} 元", 6.6, BLUE)
+    _text(c, 451.2, 291.9, f"应退（补）款：{r.refund} 元", 6.6, BLUE)
 
-    # ---- 签字栏 ----
+    # ---- 签字栏 (y=310.4) ----
     _line(c, LX, Y_SIGN, RX, Y_SIGN)
-    _text(c, LX + 6, Y_SIGN + 1, "会计主管：" + (r.accounting_supervisor or ""), 7.7)
-    _text(c, 124, Y_SIGN + 1, "复核：" + (r.reviewer or ""), 7.7)
-    _text(c, 318, Y_SIGN + 1, "出纳：" + (r.cashier or ""), 7.7)
-    _text(c, 448, Y_SIGN + 1, "报销人：" + (r.reimburser or r.applicant or ""), 7.7)
+    _text(c, 24.2, 310.4, "会计主管：" + (r.accounting_supervisor or ""), 7.7)
+    _text(c, 124.2, 310.4, "复核：" + (r.reviewer or ""), 7.7)
+    _text(c, 318.0, 310.4, "出纳：" + (r.cashier or ""), 7.7)
+    _text(c, 448.0, 310.4, "报销人：" + (r.reimburser or r.applicant or ""), 7.7)
 
     c.showPage()
     c.save()
