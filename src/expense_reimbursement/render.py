@@ -19,6 +19,7 @@ FONT = "KaiTi"
 FONT_PATH = "C:/Windows/Fonts/simkai.ttf"
 FALLBACK_FONT = "STSong-Light"
 BLUE = (0.04, 0.32, 0.6)
+BLACK = (0.05, 0.05, 0.05)
 
 
 def ty(y_top: float) -> float:
@@ -155,7 +156,26 @@ def _print_amount_split(
     while start < len(digits) - 1 and digits[start] == "0":
         start += 1
     for i in range(start, len(digits)):
-        _text(c, _amt_cx(i), y, digits[i], 6.6, BLUE, "center")
+        _text(c, _amt_cx(i), y, digits[i], 6.6, BLACK, "center")
+
+
+
+def _wrap_lines(text: str, max_w: float, size: float, max_lines: int = 3) -> list[str]:
+    """按宽度把文本拆成多行（保留完整句子，不用省略号）。"""
+
+    result: list[str] = []
+    current = ""
+    for ch in text:
+        if pdfmetrics.stringWidth(current + ch, FONT, size) > max_w and current:
+            result.append(current)
+            if len(result) >= max_lines - 1:
+                break
+            current = ch
+        else:
+            current += ch
+    if current and len(result) < max_lines:
+        result.append(current)
+    return result
 
 
 def _fit(text: str, max_w: float, size: float) -> str:
@@ -184,8 +204,8 @@ def render_reimbursement_form(r: Reimbursement, output_path: Path) -> Path:
 
     # ---- 表头信息行（标签蓝，值黑）----
     _text(c, 14.8, 124.2, "报销部门：", 6.6, BLUE)
-    _text(c, 42.0, 124.2, r.department, 6.6, BLK)
-    _text(c, 239.1, 124.2, r.created_at.strftime("%Y年%m月%d日"), 6.6, BLK)
+    _text(c, 48.5, 124.2, r.department, 6.6, BLACK)
+    _text(c, 262.0, 124.2, r.created_at.strftime("%Y年%m月%d日"), 6.6, BLACK, "center")
     pages_cn = "壹贰叁肆伍陆柒捌玖"[r.attachment_pages - 1]
     if not (1 <= r.attachment_pages <= 9):
         pages_cn = str(r.attachment_pages)
@@ -241,6 +261,13 @@ def render_reimbursement_form(r: Reimbursement, output_path: Path) -> Path:
     for x in (65.8, 66.2):
         _line(c, x, 284.5, x, 306.8, LW)
 
+    # ---- 备注（显示在"备注"标签右侧空白区，多行，黑色）----
+    if r.remarks:
+        rem_w = RX - 456.0 - 4
+        rem_lines = _wrap_lines(r.remarks, rem_w, 6.6, max_lines=3)
+        for li, line in enumerate(rem_lines):
+            _text(c, 456.0, 148.0 + li * 9.0, line, 6.6, BLACK)
+
     # ---- 数据行（值黑色）----
     for row_idx, item in enumerate(r.items):
         y = 160.8 + row_idx * ROW_H
@@ -254,22 +281,23 @@ def render_reimbursement_form(r: Reimbursement, output_path: Path) -> Path:
     _print_amount_split(c, _split_amount_digits(r.total), 271.8)
 
     # ---- 金额大写区 ----
-    _text(c, 24.2, 285.8, "金额", 7.7, BLUE)
-    _text(c, 24.2, 296.9, "（大写）", 7.7, BLUE)
+    _text(c, 40.0, 285.8, "金额", 7.7, BLUE, "center")
+    _text(c, 40.0, 296.9, "（大写）", 7.7, BLUE, "center")
     cap = _capital_text(r.total)
-    _text(c, 67.6, 291.9, cap, 8.2, BLK)   # 大写金额 左对齐 黑色
+    _text(c, 68.0, 291.9, cap, 8.2, BLACK)   # 大写金额 框内左对齐 黑色
     _text(c, 322.4, 291.9, "原借款：", 6.6, BLUE)
     loan = str(r.original_loan) if r.original_loan else ""
-    _text(c, 349.0, 291.9, loan, 6.6, BLK)
+    _text(c, 349.0, 291.9, loan, 6.6, BLACK)
     _text(c, 451.2, 291.9, "应退（补）款：", 6.6, BLUE)
     refund = str(r.refund) if r.refund else ""
-    _text(c, 500.0, 291.9, refund, 6.6, BLK)
+    _text(c, 500.0, 291.9, refund, 6.6, BLACK)
 
     # ---- 签字栏（只留标签，不填人员）----
     _text(c, 24.2, 310.4, "会计主管", 7.7, BLUE)
     _text(c, 124.2, 310.4, "复核", 7.7, BLUE)
     _text(c, 318.0, 310.4, "出纳", 7.7, BLUE)
     _text(c, 448.0, 310.4, "报销人", 7.7, BLUE)
+    _text(c, 491.5, 310.4, r.reimburser or "陈兴华", 7.7, BLACK)
 
     c.showPage()
     c.save()

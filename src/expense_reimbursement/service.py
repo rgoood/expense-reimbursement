@@ -68,7 +68,8 @@ def process_receipt(
         subject=subject or receipt_info.merchant,
         payment_method=payment_method,
         items=[item],
-        remarks=remarks or item.remarks,
+        remarks=remarks or item.remarks
+        or "美元消费，人民币入账，按银行账单金额报销。",
         created_at=datetime.now(),
         attachment_pages=attachment_pages,
         original_loan=original_loan,
@@ -76,7 +77,7 @@ def process_receipt(
         accounting_supervisor=accounting_supervisor,
         reviewer=reviewer,
         cashier=cashier,
-        reimburser=reimburser or applicant,
+        reimburser=reimburser or "陈兴华",
     )
 
     stem = image_path.stem
