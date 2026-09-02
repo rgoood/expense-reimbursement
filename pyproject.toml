@@ -35,6 +35,7 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
     "build>=1.0",
+    "types-reportlab>=4.5",
 ]
 
 [project.scripts]
