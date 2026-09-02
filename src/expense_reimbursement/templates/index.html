@@ -84,6 +84,43 @@
   const drop = document.getElementById('drop');
   const fileInput = document.getElementById('file');
   const fileName = document.getElementById('fileName');
+  const recoStatus = document.getElementById('recoStatus');
+
+  // 默认报销日期 = 今天
+  (function(){
+    const d = new Date();
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const el = document.getElementById('reimbDate');
+    if (el) el.value = d.getFullYear() + '-' + mm + '-' + dd;
+  })();
+
+  // 显示文件名并自动识别回填
+  async function showName(){
+    const f = fileInput.files[0];
+    fileName.textContent = f ? '已选择：' + f.name : '';
+    if (!f) return;
+    recoStatus.textContent = '正在识别票据…';
+    recoStatus.style.color = '#27a763';
+    const fd = new FormData();
+    fd.append('receipt', f);
+    try {
+      const resp = await fetch("{{ url_for('preview') }}", { method:'POST', body: fd });
+      const data = await resp.json();
+      if (data.error) { recoStatus.style.color = '#c0392b'; recoStatus.textContent = data.error; return; }
+      if (data.project) document.getElementById('projectInput').value = data.project;
+      if (data.subject) document.getElementById('subjectInput').value = data.subject;
+      if (data.remarks) document.getElementById('remarksInput').value = data.remarks;
+      if (data.date) document.getElementById('reimbDate').value = data.date;
+      if (data.pages) document.getElementById('pagesInput').value = data.pages;
+      recoStatus.style.color = '#27a763';
+      recoStatus.textContent = '已识别：' + (data.merchant || '凭证') + (data.amount ? ' ¥' + data.amount : '') + '（可核对修改）';
+    } catch(e) {
+      recoStatus.style.color = '#c0392b';
+      recoStatus.textContent = '识别失败，可直接填写后生成。';
+    }
+  }
+
   drop.addEventListener('click', () => fileInput.click());
   drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
   drop.addEventListener('dragleave', () => drop.classList.remove('over'));
@@ -92,43 +129,12 @@
     if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; showName(); }
   });
   fileInput.addEventListener('change', showName);
-  function showName(){
-    const f = fileInput.files[0];
-    fileName.textContent = f ? '已选择：' + f.name : '';
-  }
+
   document.getElementById('f').addEventListener('submit', () => {
-    document.getElementById('submitBtn').disabled = true;
-    document.getElementById('submitBtn').textContent = '识别中，请稍候…';
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = '识别中，请稍候…';
   });
-
-  // 默认日期=今天
-  (function(){ const d=new Date(); const dd=String(d.getDate()).padStart(2,'0'); const mm=String(d.getMonth()+1).padStart(2,'0'); document.getElementById('reimbDate').value=d.getFullYear()+'-'+mm+'-'+dd; })();
-
-  // 选中/拖拽图片后，自动调 /preview 识别并回填
-  async function autoFill(){
-    const f = fileInput.files[0];
-    if(!f) return;
-    const status = document.getElementById('recoStatus');
-    status.textContent = '正在识别票据…';
-    const fd = new FormData(); fd.append('receipt', f);
-    try {
-      const resp = await fetch("{{ url_for('preview') }}", { method:'POST', body: fd });
-      const data = await resp.json();
-      if(data.error){ status.textContent = ''; status.style.color='#c0392b'; status.textContent = data.error; return; }
-      if(data.project) document.getElementById('projectInput').value = data.project;
-      if(data.subject) document.getElementById('subjectInput').value = data.subject;
-      if(data.remarks) document.getElementById('remarksInput').value = data.remarks;
-      if(data.merchant && !document.getElementById('deptInput').value) {}
-      if(data.date) document.getElementById('reimbDate').value = data.date;
-      if(data.pages) document.getElementById('pagesInput').value = data.pages;
-      status.style.color='#27a763';
-      status.textContent = '已识别：' + (data.merchant || '凭证') + (data.amount ? ' ¥'+data.amount : '') + '（可核对修改）';
-    } catch(e){
-      status.style.color='#c0392b'; status.textContent = '识别失败，可直接填写后生成。';
-    }
-  }
-  const showName = function(){ const f=fileInput.files[0]; fileName.textContent = f ? '已选择：'+f.name : ''; autoFill(); };
-  fileInput.addEventListener('change', showName);
 </script>
 </body>
 </html>
