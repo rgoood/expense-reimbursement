@@ -64,7 +64,7 @@ def _llm_recognize(image_path: Path) -> dict[str, Any] | None:
     import os as _os
     from pathlib import Path as _P
 
-    env_file = _P(__file__).resolve().parent.parent / ".env"
+    env_file = _P(__file__).resolve().parent.parent.parent / ".env"
     if env_file.exists():
         for line in env_file.read_text(encoding="utf-8").splitlines():
             line = line.strip()
@@ -79,33 +79,41 @@ def _llm_recognize(image_path: Path) -> dict[str, Any] | None:
         return None
     try:
         import openai
-
-        data = base64.b64encode(image_path.read_bytes()).decode()
-        client = openai.OpenAI(api_key=key, base_url=base, timeout=120)
-        prompt = (
-            "You are an expense reimbursement assistant. Analyze this receipt "
-            "image and reply with ONLY a JSON object. Keys: project (one of "
-            "software-service/transport/accommodation/meal/office/travel/"
-            "communication/other), subject (one-line summary in Chinese), "
-            "remarks (currency/settlement), amount (numeric), date (YYYY-MM-DD), "
-            "merchant. Fill project based on the merchant/category."
-        )
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": [
-                {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + data}},
-            ]}],
-            max_tokens=500,
-        )
-        txt = (resp.choices[0].message.content or "").strip()
-        s, e = txt.find("{"), txt.rfind("}")
-        if s == -1 or e <= s:
-            return None
-        obj = _json.loads(txt[s : e + 1])
-        return obj if isinstance(obj, dict) else None
-    except Exception:
+    except ImportError:
         return None
+
+    data = base64.b64encode(image_path.read_bytes()).decode()
+    prompt = (
+        "这是报销凭证/转账/账单详情截图。忽略顶部状态栏(时间、信号、电量)和无关UI，"
+        "重点看「转账备注」「商品名称」「金额」等核心字段。只返回 JSON，字段："
+        "project(报销项目，从 [软件服务费,货款,交通费,住宿费,餐饮费,办公费,差旅费,通讯费,其他费用]"
+        "中选，"
+        "转账备注写「货款」则 project=货款)，"
+        "subject(报销事由一句中文，用转账备注或商品名，如「支付货款」「OPENROUTER API 充值」)，"
+        "remarks(备注，照抄转账备注/重要信息，含货币/入账)，"
+        "amount(数字金额，不带¥)，date(YYYY-MM-DD)，merchant(对方/商户名称)。"
+    )
+    for _attempt in range(3):
+        try:
+            client = openai.OpenAI(api_key=key, base_url=base, timeout=120)
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + data}},
+                ]}],
+                max_tokens=600,
+            )
+            txt = (resp.choices[0].message.content or "").strip()
+            s, e = txt.find("{"), txt.rfind("}")
+            if s == -1 or e <= s:
+                continue  # 空响应，重试
+            obj = _json.loads(txt[s : e + 1])
+            if isinstance(obj, dict) and obj:
+                return obj
+        except Exception:
+            continue
+    return None
 
 
 def _int(value: str | None, default: int = 1) -> int:
@@ -194,8 +202,16 @@ def _map_project(key: str) -> str:
         "软件服务费": "软件服务费", "交通费": "交通费", "住宿费": "住宿费",
         "餐饮费": "餐饮费", "办公费": "办公费", "差旅费": "差旅费",
         "通讯费": "通讯费", "其他费用": "其他费用",
+        "货款": "货款", "贷款": "货款", "采购款": "货款", "设备款": "货款",
+        "服务费": "服务费", "订阅": "软件服务费",
     }
-    return mapping.get(key.lower(), "其他费用")
+    k = (key or "").strip().lower()
+    if k in mapping:
+        return mapping[k]
+    # 常见中文费用词直接透传
+    if k.endswith("费") or "款" in k:
+        return key.strip()
+    return "其他费用"
 
 
 @app.post("/process")
@@ -215,6 +231,12 @@ def process() -> Any:
         rows = []
     if not rows:
         rows = [{} for _ in files]
+    if len(rows) > 8:
+        return render_template(
+            "index.html",
+            payments=_payments(),
+            error="一张报销单最多支持 8 条明细，请分批提交。",
+        )
 
     # 用 rows 里的 img（已保存的凭证图路径）确定凭证图列表
     images: list[Path] = []
@@ -244,6 +266,7 @@ def process() -> Any:
     reviewer = (request.form.get("reviewer") or "").strip()
     cashier = (request.form.get("cashier") or "").strip()
     date_value = _parse_date(request.form.get("date"))
+    remarks = (request.form.get("remarks") or "").strip()
     pm_raw = (request.form.get("payment_method") or "其他").strip()
     try:
         payment_method = PaymentMethod(pm_raw)
@@ -260,6 +283,7 @@ def process() -> Any:
             reimburser=reimburser,
             payment_method=payment_method,
             date=date_value,
+            remarks=remarks,
             accounting_supervisor=supervisor,
             reviewer=reviewer,
             cashier=cashier,
@@ -279,10 +303,7 @@ def process() -> Any:
         receipt_name=result.receipt_path.name,
         form_url=url_for("download", filename=result.form_path.name),
         receipt_url=url_for("download", filename=result.receipt_path.name),
-        extracted_text="",
         merchant="、".join((row.get("subject") or "") for row in rows),
-        tax_id="",
-        order_no="",
         total=str(total),
         capital=r.subject,
         item_count=r.item_count,
@@ -291,7 +312,7 @@ def process() -> Any:
             "department": r.department,
             "subject": "、".join((row.get("subject") or "") for row in rows),
             "payment_method": r.payment_method.value,
-            "remarks": "",
+            "remarks": remarks,
             "reimburser": r.reimburser,
             "attachment_pages": r.attachment_pages,
         },

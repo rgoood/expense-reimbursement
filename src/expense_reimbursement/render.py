@@ -68,16 +68,49 @@ CN_CAP_UNITS = ["佰", "仟", "万", "仟", "佰", "拾", "元", "角", "分"]
 
 
 def _capital_text(value: Decimal) -> str:
-    """返回模板样式大写：固定高位单位佰仟万仟 + 标准大写（分位0补零分）。
+    """模板样式大写：固定前缀佰仟万仟 + 逐位大写（0 位显示 零+单位，分位0补零分）。
 
-    如 711.40 -> 佰仟万仟柒佰壹拾壹元肆角零分。
+    如 1704.12 -> 佰仟万仟壹仟柒佰零拾肆元壹角贰分；711.40 -> 佰仟万仟柒佰壹拾壹元肆角零分。
     """
 
-    from expense_reimbursement.models import amount_to_chinese
-
-    result = amount_to_chinese(value)
-    if result.endswith("角"):
-        result += "零分"
+    cn = "零壹贰叁肆伍陆柒捌玖"
+    units = ["元", "拾", "佰", "仟", "万", "拾", "佰", "仟"]
+    v = abs(Decimal(str(value)))
+    integer = int(v)
+    cents = int((v - integer) * 100 + Decimal("0.001"))
+    jiao, fen = cents // 10, cents % 10
+    digits = []
+    n = integer
+    for _ in range(8):
+        digits.append(n % 10)
+        n //= 10
+    hi = 7
+    while hi >= 0 and digits[hi] == 0:
+        hi -= 1
+    parts = []
+    for pos in range(hi, -1, -1):
+        d = digits[pos]
+        if d == 0:
+            if pos != 0:
+                parts.append("零" + units[pos])
+        else:
+            parts.append(cn[d] + units[pos])
+    if not parts:
+        parts.append("零元")
+    result = "".join(parts)
+    if fen == 0 and jiao == 0:
+        if not result.endswith("元"):
+            result += "元"
+        result += "整"
+    else:
+        if jiao:
+            result += cn[jiao] + "角"
+        elif fen:
+            result += "零"
+        if fen:
+            result += cn[fen] + "分"
+        else:
+            result += "零分"
     return "佰仟万仟" + result
 
 
@@ -327,7 +360,7 @@ def render_reimbursement_form(r: Reimbursement, output_path: Path) -> Path:
         _text(c, 49.6, y, _fit(item.project or "", 56, 6.6), 6.6, BLK)
         _text(c, 144.5, y, _fit(item.description or "", X_SUMM_R - 144.5 - 4, 6.6), 6.6, BLK)
         _print_amount_split(c, _split_amount_digits(item.amount), y - 1)
-        _text(c, 434.8 + 3, y, _fit(item.remarks or "", RX - 434.8 - 6, 6.6), 6.6, BLK)
+        _text(c, X_NOTE_R + 3, y, _fit(item.remarks or "", RX - X_NOTE_R - 6, 6.6), 6.6, BLK)
 
     # ---- 合计（值黑色）----
     _text(c, 156.2, 272.8, "合计", 6.6, BLUE)
@@ -375,7 +408,8 @@ def render_receipt(
         maxw, maxh = PAGE_W - 40, PAGE_H - 140
         ratio = min(maxw / iw, maxh / ih)
         dw, dh = iw * ratio, ih * ratio
-        c.drawImage(str(image_path), 20, 50, width=dw, height=dh, preserveAspectRatio=True)
+        cx = (PAGE_W - dw) / 2
+        c.drawImage(str(image_path), cx, 50, width=dw, height=dh, preserveAspectRatio=True)
         if summary:
             _text(c, PAGE_W / 2, 40, "识别摘要：" + summary, 8, BLUE, "center")
     else:
@@ -404,7 +438,8 @@ def render_receipts(
             maxw, maxh = PAGE_W - 40, PAGE_H - 140
             ratio = min(maxw / iw, maxh / ih)
             dw, dh = iw * ratio, ih * ratio
-            c.drawImage(str(image), 20, 50, width=dw, height=dh, preserveAspectRatio=True)
+            cx = (PAGE_W - dw) / 2
+            c.drawImage(str(image), cx, 50, width=dw, height=dh, preserveAspectRatio=True)
             if idx < len(summaries) and summaries[idx]:
                 _text(c, PAGE_W / 2, 40, "识别摘要：" + summaries[idx], 8, BLUE, "center")
         else:

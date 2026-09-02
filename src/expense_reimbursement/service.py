@@ -113,6 +113,7 @@ def process_receipts(
     reimburser: str = "",
     payment_method: PaymentMethod = PaymentMethod.OTHER,
     date: date | None = None,
+    remarks: str = "",
     accounting_supervisor: str = "",
     reviewer: str = "",
     cashier: str = "",
@@ -142,7 +143,7 @@ def process_receipts(
         department=department,
         payment_method=payment_method,
         items=items,
-        remarks="",
+        remarks=remarks,
         created_at=datetime.combine(date, datetime.min.time())
         if date
         else datetime.now(),

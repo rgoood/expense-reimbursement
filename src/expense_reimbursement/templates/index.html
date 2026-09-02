@@ -67,9 +67,10 @@
 
       <h2 style="margin-top:24px">2. 报销信息</h2>
       <div class="grid" style="margin-bottom:16px">
-        <div class="field"><label>报销部门</label><input name="department" id="deptInput" placeholder="如：运营八部"></div>
-        <div class="field"><label>报销人</label><input name="reimburser" placeholder="默认 陈兴华"></div>
+        <div class="field"><label>报销部门</label><input name="department" id="deptInput" value="运营八部" placeholder="如：运营八部"></div>
+        <div class="field"><label>报销人</label><input name="reimburser" value="陈兴华" placeholder="默认 陈兴华"></div>
         <div class="field"><label>报销日期（默认今天）</label><input name="date" type="date" id="reimbDate"></div>
+        <div class="field full"><label>备注（整单，可选）</label><input name="remarks" id="reimbRemarks" placeholder="如：本次出差住宿费，含两晚；发票已验真"></div>
       </div>
 
       <table class="rows">
@@ -80,7 +81,6 @@
             <th>报销事由</th>
             <th style="width:150px">备注</th>
             <th style="width:110px">金额(元)</th>
-            <th style="width:100px">日期</th>
             <th style="width:80px">页数</th>
             <th style="width:40px"></th>
           </tr>
@@ -96,7 +96,7 @@
       </div>
 
       <button class="btn" type="submit" id="submitBtn" style="margin-top:16px">生成报销单</button>
-      <p class="hint">提示：保证 OCR 已安装；识别后可逐行修改黑色内容。</p>
+      <p class="hint">提示：每张报销单最多 8 条明细；识别后可逐行修改黑色内容。未配置 API Key 时将回退到本机 OCR。</p>
     </form>
   </div>
 </div>
@@ -107,6 +107,39 @@
   const fileInput = document.getElementById('file');
   const status = document.getElementById('recoStatus');
   const rowsBody = document.getElementById('rowsBody');
+  const STATE_KEY = 'expense_reimb_state_v1';
+  function saveState(){
+    try {
+      const dept = document.getElementById('deptInput');
+      const reim = document.querySelector('input[name="reimburser"]');
+      const dt = document.getElementById('reimbDate');
+      const rem = document.getElementById('reimbRemarks');
+      localStorage.setItem(STATE_KEY, JSON.stringify({
+        rows: ROWS,
+        department: dept ? dept.value : '',
+        reimburser: reim ? reim.value : '',
+        date: dt ? dt.value : '',
+        remarks: rem ? rem.value : ''
+      }));
+    } catch(e){}
+  }
+  function restoreState(){
+    try {
+      const raw = localStorage.getItem(STATE_KEY);
+      if (!raw) return;
+      const st = JSON.parse(raw);
+      if (Array.isArray(st.rows) && st.rows.length) ROWS = st.rows;
+      const dept = document.getElementById('deptInput');
+      const reim = document.querySelector('input[name="reimburser"]');
+      const dt = document.getElementById('reimbDate');
+      const rem = document.getElementById('reimbRemarks');
+      if (dept && st.department) dept.value = st.department;
+      if (reim && st.reimburser) reim.value = st.reimburser;
+      if (dt && st.date) dt.value = st.date;
+      if (rem && st.remarks) rem.value = st.remarks;
+      if (ROWS.length) renderRows();
+    } catch(e){}
+  }
 
   // 默认日期
   (function(){ const d=new Date(); const dd=String(d.getDate()).padStart(2,'0'); const mm=String(d.getMonth()+1).padStart(2,'0'); const el=document.getElementById('reimbDate'); if(el) el.value=d.getFullYear()+'-'+mm+'-'+dd; })();
@@ -128,7 +161,6 @@
             subject: data.subject || (data.merchant || ''),
             remarks: data.remarks || '',
             amount: data.amount || '0',
-            date: data.date || '',
             pages: data.pages || 1
           });
           renderRows();
@@ -141,7 +173,7 @@
 
   function renderRows(){
     if (ROWS.length === 0){
-      rowsBody.innerHTML = '<tr><td colspan="8" class="empty">尚未上传票据。</td></tr>';
+      rowsBody.innerHTML = '<tr><td colspan="7" class="empty">尚未上传票据。</td></tr>';
       document.getElementById('emptyHint').style.display = 'none';
     } else {
       document.getElementById('emptyHint').style.display = 'none';
@@ -154,13 +186,13 @@
           '<td><input value="'+esc(r.subject)+'" data-i="'+i+'" data-f="subject"></td>'+
           '<td><input value="'+esc(r.remarks)+'" data-i="'+i+'" data-f="remarks"></td>'+
           '<td class="amt"><input type="number" step="0.01" value="'+esc(r.amount)+'" data-i="'+i+'" data-f="amount"></td>'+
-          '<td><input type="date" value="'+esc(r.date)+'" data-i="'+i+'" data-f="date"></td>'+
           '<td><input type="number" min="1" value="'+esc(r.pages)+'" data-i="'+i+'" data-f="pages"></td>'+
           '<td><button type="button" class="del" data-i="'+i+'">✕</button></td>';
         rowsBody.appendChild(tr);
       });
     }
     recalc();
+    saveState();
   }
 
   function recalc(){
@@ -180,6 +212,7 @@
     const t = e.target; const i = +t.dataset.i; const f = t.dataset.f;
     if (!isNaN(i) && f && ROWS[i]) ROWS[i][f] = t.value;
     recalc();
+    saveState();
   });
   rowsBody.addEventListener('click', e => {
     if (e.target.classList.contains('del')) { ROWS.splice(+e.target.dataset.i, 1); renderRows(); }
@@ -190,14 +223,36 @@
   drop.addEventListener('dragleave', () => drop.classList.remove('over'));
   drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer.files); });
   fileInput.addEventListener('change', e => { addFiles(e.target.files); fileInput.value=''; });
+  ['deptInput','reimbDate','reimbRemarks'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', saveState);
+  });
+  const reimInput = document.querySelector('input[name="reimburser"]');
+  if (reimInput) reimInput.addEventListener('input', saveState);
+  restoreState();
 
-  // 提交：把每行 + 对应文件一起提交
-  document.getElementById('f').addEventListener('submit', () => {
-    // 每行隐藏字段上报选中文件（用 File 数组不便直接POST多文件，这里前端用 ROWS 的 name 无法回传文件句柄）
-    // 方案：把每行作为 JSON 隐藏字段提交，后端按行生成（图片通过 name=receipts 多值上传原图）
-    const meta = document.createElement('input'); meta.type='hidden'; meta.name='rows'; meta.value = JSON.stringify(ROWS);
+  // 提交：把每行明细作为 JSON 隐藏字段提交（凭证图已在 preview 阶段保存到服务端）
+  document.getElementById('f').addEventListener('submit', e => {
+    if (ROWS.length === 0) {
+      e.preventDefault();
+      status.textContent = '请先上传至少一张票据。';
+      return;
+    }
+    if (ROWS.length > 8) {
+      e.preventDefault();
+      status.textContent = '一张报销单最多 8 条明细，请删除多余行或分批提交。';
+      return;
+    }
+    const old = document.querySelector('input[name="rows"]');
+    if (old) old.remove();
+    const meta = document.createElement('input');
+    meta.type = 'hidden';
+    meta.name = 'rows';
+    meta.value = JSON.stringify(ROWS);
     document.getElementById('f').appendChild(meta);
-    const btn = document.getElementById('submitBtn'); btn.disabled = true; btn.textContent = '正在生成…';
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = '正在生成…';
   });
 </script>
 </body>

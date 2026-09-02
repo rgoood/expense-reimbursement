@@ -46,6 +46,14 @@ def test_split_amount_digits() -> None:
     assert _split_amount_digits(Decimal("12.34")) == ["0", "0", "0", "0", "0", "1", "2", "3", "4"]
 
 
+def test_capital_text() -> None:
+    from expense_reimbursement.render import _capital_text
+
+    assert _capital_text(Decimal("711.40")) == "佰仟万仟柒佰壹拾壹元肆角零分"
+    assert _capital_text(Decimal("1704.12")) == "佰仟万仟壹仟柒佰零拾肆元壹角贰分"
+    assert _capital_text(Decimal("2000")) == "佰仟万仟贰仟零佰零拾元整"
+
+
 def test_font_fallback_to_cid_when_kaiti_missing(
     tmp_path: Path, monkeypatch
 ) -> None:

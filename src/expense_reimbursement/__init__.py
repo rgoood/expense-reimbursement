@@ -25,8 +25,7 @@ __all__ = [
 __version__ = "0.1.0"
 
 
-def create_app() -> Any:  # noqa: F821
-    """创建 Flask 应用（延迟导入 Flask）。"""
+def create_app() -> Any:
     """创建 Flask 应用（延迟导入，避免未装 Flask 时报错）。"""
 
     from expense_reimbursement.web import app
