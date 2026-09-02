@@ -59,7 +59,8 @@ def process_receipt(
     text = ocr_engine.extract_text(image_path)
     item, receipt_info = parse_receipt_text(text)
     item.project = project or item.category.value
-    item.description = item.description or receipt_info.merchant
+    # 摘要优先取调用方提供的 subject（报销单摘要），否则用 OCR 商户名
+    item.description = subject or item.description or receipt_info.merchant
 
     reimbursement = Reimbursement(
         applicant=applicant,
