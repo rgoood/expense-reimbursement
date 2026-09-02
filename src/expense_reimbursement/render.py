@@ -383,3 +383,35 @@ def render_receipt(
     c.showPage()
     c.save()
     return output_path
+
+def render_receipts(
+    images: list[Path],
+    output_path: Path,
+    summaries: list[str] | None = None,
+) -> Path:
+    """生成 A5 凭证 PDF，每张凭证图一页。"""
+
+    _register_font()
+    c = canvas.Canvas(str(output_path), pagesize=(PAGE_W, PAGE_H))
+    summaries = summaries or []
+    for idx, image in enumerate(images):
+        _text(c, PAGE_W / 2, PAGE_H - 40, f"报销凭证 {idx + 1}", 14, BLUE, "center")
+        if Path(image).exists():
+            from PIL import Image
+
+            with Image.open(image) as img:
+                iw, ih = img.size
+            maxw, maxh = PAGE_W - 40, PAGE_H - 140
+            ratio = min(maxw / iw, maxh / ih)
+            dw, dh = iw * ratio, ih * ratio
+            c.drawImage(str(image), 20, 50, width=dw, height=dh, preserveAspectRatio=True)
+            if idx < len(summaries) and summaries[idx]:
+                _text(c, PAGE_W / 2, 40, "识别摘要：" + summaries[idx], 8, BLUE, "center")
+        else:
+            _text(c, PAGE_W / 2, PAGE_H / 2, "（未提供凭证图片。）", 9, BLUE, "center")
+        c.showPage()
+    if not images:
+        _text(c, PAGE_W / 2, PAGE_H / 2, "（无凭证图片。）", 9, BLUE, "center")
+        c.showPage()
+    c.save()
+    return output_path

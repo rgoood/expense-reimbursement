@@ -8,21 +8,22 @@
     :root { --blue:#316FD9; --blue2:#1e4fae; --ink:#0d0d0d; --bg:#f5f7fb; --line:#dce3f0; }
     * { box-sizing:border-box; }
     body { font-family:"Microsoft YaHei","PingFang SC",sans-serif; background:var(--bg); margin:0; color:var(--ink); }
-    .wrap { max-width:860px; margin:0 auto; padding:28px 20px 60px; }
+    .wrap { max-width:960px; margin:0 auto; padding:28px 20px 60px; }
     h1 { text-align:center; letter-spacing:18px; color:var(--blue2); font-weight:600; margin:6px 0 2px; }
     .sub { text-align:center; color:#8a97ad; font-size:13px; margin-bottom:26px; }
     .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:22px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,.04); }
     .card h2 { font-size:16px; color:var(--blue2); margin:0 0 14px; border-left:4px solid var(--blue); padding-left:10px; }
-    .drop { border:2px dashed var(--line); border-radius:10px; padding:44px 20px; text-align:center; cursor:pointer; transition:.2s; background:#fbfcff; }
+    .drop { border:2px dashed var(--line); border-radius:10px; padding:40px 20px; text-align:center; cursor:pointer; transition:.2s; background:#fbfcff; }
     .drop:hover, .drop.over { border-color:var(--blue); background:#eef4ff; }
     .drop .icon { font-size:44px; color:var(--blue); }
     .drop p { margin:10px 0 4px; color:#5a6b85; }
     .drop small { color:#9aa7bb; }
     #fileName { margin-top:10px; color:var(--blue2); font-weight:600; word-break:break-all; }
+    #recoStatus { margin-top:10px; color:#27a763; font-size:13px; }
     .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 18px; }
     .field label { display:block; font-size:13px; color:#51617c; margin-bottom:5px; }
-    .field input, .field select { width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:7px; font-size:14px; }
-    .field input:focus, .field select:focus { outline:none; border-color:var(--blue); }
+    .field input { width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:7px; font-size:14px; }
+    .field input:focus { outline:none; border-color:var(--blue); }
     .full { grid-column:1 / -1; }
     .btn { display:block; width:100%; padding:13px; background:var(--blue); color:#fff; border:none; border-radius:9px; font-size:16px; cursor:pointer; margin-top:4px; }
     .btn:hover { background:var(--blue2); }
@@ -31,17 +32,26 @@
     .hint { font-size:12px; color:#9aa7bb; margin-top:8px; }
     .legend { display:flex; gap:18px; font-size:12px; color:#7c8aa0; margin-bottom:16px; }
     .legend span b { font-weight:600; }
+    table.rows { width:100%; border-collapse:collapse; }
+    table.rows th { background:#f0f4fb; color:var(--blue2); font-size:12px; text-align:left; padding:7px 6px; border:1px solid var(--line); }
+    table.rows td { border:1px solid var(--line); padding:6px; vertical-align:top; }
+    table.rows input { width:100%; border:1px solid var(--line); border-radius:6px; padding:6px 8px; font-size:13px; }
+    table.rows td.amt input { width:90px; }
+    .del { color:#c0392b; cursor:pointer; font-size:16px; border:none; background:none; }
+    .summary { display:flex; gap:18px; margin-top:14px; font-size:14px; color:var(--blue2); }
+    .summary b { font-size:16px; }
+    .empty { color:#9aa7bb; text-align:center; padding:14px; font-size:13px; }
   </style>
 </head>
 <body>
 <div class="wrap">
   <h1>费用报销单</h1>
-  <div class="sub">上传票据图片，自动识别并生成 A5 报销单与凭证</div>
+  <div class="sub">上传票据图片，自动识别并生成 A5 报销单与凭证（支持多张）</div>
 
   {% if error %}<div class="error">{{ error }}</div>{% endif %}
 
   <div class="card">
-    <h2>1. 上传票据</h2>
+    <h2>1. 上传票据（可多选）</h2>
     <div class="legend">
       <span><b style="color:#000">黑色</b>=从票据识别，可修改</span>
       <span><b style="color:#316FD9">蓝色</b>=模板固定</span>
@@ -49,91 +59,145 @@
     <form id="f" method="post" action="{{ url_for('process') }}" enctype="multipart/form-data">
       <div class="drop" id="drop">
         <div class="icon">&#128196;</div>
-        <p>拖拽图片到这里，或 <span style="color:#316FD9">点击选择</span></p>
-        <small>支持 JPG / PNG / BMP / WEBP / TIFF</small>
-        <div id="fileName"></div><div id="recoStatus" style="margin-top:8px;color:#27a763;font-size:13px;"></div>
-        <input type="file" id="file" name="receipt" accept=".jpg,.jpeg,.png,.bmp,.webp,.tiff,.gif" hidden>
+        <p>拖拽多张图片到这里，或 <span style="color:#316FD9">点击选择</span></p>
+        <small>支持 JPG / PNG / BMP / WEBP / TIFF，可同时选多张</small>
+        <div id="fileName"></div><div id="recoStatus"></div>
+        <input type="file" id="file" name="receipts" multiple accept=".jpg,.jpeg,.png,.bmp,.webp,.tiff,.gif" hidden>
       </div>
 
-      <h2 style="margin-top:24px">2. 报销信息（可填，留空自动识别）</h2>
-      <div class="grid">
+      <h2 style="margin-top:24px">2. 报销信息</h2>
+      <div class="grid" style="margin-bottom:16px">
         <div class="field"><label>报销部门</label><input name="department" id="deptInput" placeholder="如：运营八部"></div>
         <div class="field"><label>报销人</label><input name="reimburser" placeholder="默认 陈兴华"></div>
-        <div class="field"><label>报销项目</label><input name="project" id="projectInput" placeholder="如：服务费 / 差旅费"></div>
-        <div class="field">
-          <label>报销日期（默认今天）</label>
-          <input name="date" type="date" id="reimbDate">
-        </div>
-        <div class="field full"><label>报销事由（摘要）</label><input name="subject" id="subjectInput" placeholder="如：OPENROUTER API 充值"></div>
-        <div class="field full"><label>备注</label><input name="remarks" id="remarksInput" placeholder="如：美元消费，人民币入账，按银行账单金额报销。"></div>
-        <div class="field"><label>单据及附件页数</label><input name="pages" type="number" id="pagesInput" value="1" min="1"></div>
-        <div class="field"><label>会计主管</label><input name="supervisor"></div>
-        <div class="field"><label>复核</label><input name="reviewer"></div>
-        <div class="field"><label>出纳</label><input name="cashier"></div>
-        <div class="field"><label>原借款（元）</label><input name="original_loan" type="number" step="0.01" placeholder="0"></div>
-        <div class="field"><label>应退（补）款（元）</label><input name="refund" type="number" step="0.01" placeholder="0"></div>
+        <div class="field"><label>报销日期（默认今天）</label><input name="date" type="date" id="reimbDate"></div>
+        <div class="field"><label>支付方式</label><input name="payment_method" placeholder="如：支付宝 / 现金 / 银行转账"></div>
       </div>
 
-      <button class="btn" type="submit" id="submitBtn">生成报销单</button>
-      <p class="hint">提示：首次如需 OCR，请确保本机已安装 Tesseract 与中文语言包。</p>
+      <table class="rows">
+        <thead>
+          <tr>
+            <th style="width:90px">序号</th>
+            <th style="width:130px">报销项目</th>
+            <th>报销事由</th>
+            <th style="width:150px">备注</th>
+            <th style="width:110px">金额(元)</th>
+            <th style="width:100px">日期</th>
+            <th style="width:80px">页数</th>
+            <th style="width:40px"></th>
+          </tr>
+        </thead>
+        <tbody id="rowsBody"></tbody>
+      </table>
+      <div class="empty" id="emptyHint">尚未上传票据。上传后将自动识别并生成明细行。</div>
+
+      <div class="summary">
+        <div>报销金额：<b id="sumAmount">¥ 0.00</b></div>
+        <div>附件总页数：<b id="sumPages">0</b> 页</div>
+        <div>凭证张数：<b id="sumCount">0</b> 张</div>
+      </div>
+
+      <button class="btn" type="submit" id="submitBtn" style="margin-top:16px">生成报销单</button>
+      <p class="hint">提示：保证 OCR 已安装；识别后可逐行修改黑色内容。</p>
     </form>
   </div>
 </div>
 
 <script>
+  let ROWS = [];
   const drop = document.getElementById('drop');
   const fileInput = document.getElementById('file');
-  const fileName = document.getElementById('fileName');
-  const recoStatus = document.getElementById('recoStatus');
+  const status = document.getElementById('recoStatus');
+  const rowsBody = document.getElementById('rowsBody');
 
-  // 默认报销日期 = 今天
-  (function(){
-    const d = new Date();
-    const dd = String(d.getDate()).padStart(2,'0');
-    const mm = String(d.getMonth()+1).padStart(2,'0');
-    const el = document.getElementById('reimbDate');
-    if (el) el.value = d.getFullYear() + '-' + mm + '-' + dd;
-  })();
+  // 默认日期
+  (function(){ const d=new Date(); const dd=String(d.getDate()).padStart(2,'0'); const mm=String(d.getMonth()+1).padStart(2,'0'); const el=document.getElementById('reimbDate'); if(el) el.value=d.getFullYear()+'-'+mm+'-'+dd; })();
 
-  // 显示文件名并自动识别回填
-  async function showName(){
-    const f = fileInput.files[0];
-    fileName.textContent = f ? '已选择：' + f.name : '';
-    if (!f) return;
-    recoStatus.textContent = '正在识别票据…';
-    recoStatus.style.color = '#27a763';
-    const fd = new FormData();
-    fd.append('receipt', f);
-    try {
-      const resp = await fetch("{{ url_for('preview') }}", { method:'POST', body: fd });
-      const data = await resp.json();
-      if (data.error) { recoStatus.style.color = '#c0392b'; recoStatus.textContent = data.error; return; }
-      if (data.project) document.getElementById('projectInput').value = data.project;
-      if (data.subject) document.getElementById('subjectInput').value = data.subject;
-      if (data.remarks) document.getElementById('remarksInput').value = data.remarks;
-      if (data.date) document.getElementById('reimbDate').value = data.date;
-      if (data.pages) document.getElementById('pagesInput').value = data.pages;
-      recoStatus.style.color = '#27a763';
-      recoStatus.textContent = '已识别：' + (data.merchant || '凭证') + (data.amount ? ' ¥' + data.amount : '') + '（可核对修改）';
-    } catch(e) {
-      recoStatus.style.color = '#c0392b';
-      recoStatus.textContent = '识别失败，可直接填写后生成。';
+  function addFiles(list){
+    status.textContent = '正在识别票据…';
+    let pending = 0;
+    for (const file of Array.from(list)){
+      const fd = new FormData(); fd.append('receipt', file);
+      pending++;
+      fetch("{{ url_for('preview') }}", { method:'POST', body: fd })
+        .then(r=>r.json())
+        .then(data=>{
+          if (data.error){ status.textContent = data.error; return; }
+          ROWS.push({
+            name: file.name,
+            project: data.project || '',
+            subject: data.subject || (data.merchant || ''),
+            remarks: data.remarks || '',
+            amount: data.amount || '0',
+            date: data.date || '',
+            pages: data.pages || 1
+          });
+          renderRows();
+          pending--;
+          if (pending === 0) status.textContent = '已识别 ' + ROWS.length + ' 张，请核对修改下方明细。';
+        })
+        .catch(()=>{ status.textContent = '识别失败，可手动填写。'; pending--; });
     }
   }
+
+  function renderRows(){
+    if (ROWS.length === 0){
+      rowsBody.innerHTML = '<tr><td colspan="8" class="empty">尚未上传票据。</td></tr>';
+      document.getElementById('emptyHint').style.display = 'none';
+    } else {
+      document.getElementById('emptyHint').style.display = 'none';
+      rowsBody.innerHTML = '';
+      ROWS.forEach((r, i) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>'+(i+1)+'</td>'+
+          '<td><input value="'+esc(r.project)+'" data-i="'+i+'" data-f="project"></td>'+
+          '<td><input value="'+esc(r.subject)+'" data-i="'+i+'" data-f="subject"></td>'+
+          '<td><input value="'+esc(r.remarks)+'" data-i="'+i+'" data-f="remarks"></td>'+
+          '<td class="amt"><input type="number" step="0.01" value="'+esc(r.amount)+'" data-i="'+i+'" data-f="amount"></td>'+
+          '<td><input type="date" value="'+esc(r.date)+'" data-i="'+i+'" data-f="date"></td>'+
+          '<td><input type="number" min="1" value="'+esc(r.pages)+'" data-i="'+i+'" data-f="pages"></td>'+
+          '<td><button type="button" class="del" data-i="'+i+'">✕</button></td>';
+        rowsBody.appendChild(tr);
+      });
+    }
+    recalc();
+  }
+
+  function recalc(){
+    let sum = 0, pages = 0;
+    ROWS.forEach(r => {
+      sum += parseFloat(r.amount||'0') || 0;
+      pages += parseInt(r.pages||'1') || 0;
+    });
+    document.getElementById('sumAmount').textContent = '¥ ' + sum.toFixed(2);
+    document.getElementById('sumPages').textContent = pages;
+    document.getElementById('sumCount').textContent = ROWS.length;
+  }
+
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  rowsBody.addEventListener('input', e => {
+    const t = e.target; const i = +t.dataset.i; const f = t.dataset.f;
+    if (!isNaN(i) && f && ROWS[i]) ROWS[i][f] = t.value;
+    recalc();
+  });
+  rowsBody.addEventListener('click', e => {
+    if (e.target.classList.contains('del')) { ROWS.splice(+e.target.dataset.i, 1); renderRows(); }
+  });
 
   drop.addEventListener('click', () => fileInput.click());
   drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
   drop.addEventListener('dragleave', () => drop.classList.remove('over'));
-  drop.addEventListener('drop', e => {
-    e.preventDefault(); drop.classList.remove('over');
-    if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; showName(); }
-  });
-  fileInput.addEventListener('change', showName);
+  drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer.files); });
+  fileInput.addEventListener('change', e => { addFiles(e.target.files); fileInput.value=''; });
 
+  // 提交：把每行 + 对应文件一起提交
   document.getElementById('f').addEventListener('submit', () => {
-    const btn = document.getElementById('submitBtn');
-    btn.disabled = true;
-    btn.textContent = '识别中，请稍候…';
+    // 每行隐藏字段上报选中文件（用 File 数组不便直接POST多文件，这里前端用 ROWS 的 name 无法回传文件句柄）
+    // 方案：把每行作为 JSON 隐藏字段提交，后端按行生成（图片通过 name=receipts 多值上传原图）
+    const meta = document.createElement('input'); meta.type='hidden'; meta.name='rows'; meta.value = JSON.stringify(ROWS);
+    document.getElementById('f').appendChild(meta);
+    const btn = document.getElementById('submitBtn'); btn.disabled = true; btn.textContent = '正在生成…';
   });
 </script>
 </body>

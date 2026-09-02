@@ -16,7 +16,11 @@ from expense_reimbursement.models import (
 )
 from expense_reimbursement.ocr import Engine, get_engine
 from expense_reimbursement.parser import parse_receipt_text
-from expense_reimbursement.render import render_receipt, render_reimbursement_form
+from expense_reimbursement.render import (
+    render_receipt,
+    render_receipts,
+    render_reimbursement_form,
+)
 
 
 @dataclass(slots=True)
@@ -97,6 +101,85 @@ def process_receipt(
         receipt_info=receipt_info,
         extracted_text=text,
     )
+
+
+def process_receipts(
+    rows: list[dict[str, str]],
+    images: list[Path],
+    output_dir: Path,
+    *,
+    applicant: str = "",
+    department: str = "",
+    reimburser: str = "",
+    payment_method: PaymentMethod = PaymentMethod.OTHER,
+    date: date | None = None,
+    accounting_supervisor: str = "",
+    reviewer: str = "",
+    cashier: str = "",
+) -> ReceiptResult:
+    """按前端已识别的多行明细生成报销单（每行对应一张凭证）。"""
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    items: list[ExpenseItem] = []
+    for row in rows:
+        amt = Decimal(str(row.get("amount") or "0"))
+        d = _parse_date(row.get("date"))
+        items.append(
+            ExpenseItem(
+                project=row.get("project") or "",
+                description=row.get("subject") or row.get("remarks") or "",
+                amount=amt,
+                remarks=row.get("remarks") or "",
+                date=d,
+            )
+        )
+    pages = sum(int(row.get("pages") or 1) for row in rows) or len(rows)
+
+    reimbursement = Reimbursement(
+        applicant=applicant,
+        department=department,
+        payment_method=payment_method,
+        items=items,
+        remarks="",
+        created_at=datetime.combine(date, datetime.min.time())
+        if date
+        else datetime.now(),
+        attachment_pages=pages,
+        reimburser=reimburser or applicant or "陈兴华",
+        accounting_supervisor=accounting_supervisor,
+        reviewer=reviewer,
+        cashier=cashier,
+    )
+
+    stem = "reimbursement"
+    form_path = output_dir / f"{stem}_reimbursement_form.pdf"
+    receipt_path = output_dir / f"{stem}_receipt.pdf"
+
+    render_reimbursement_form(reimbursement, form_path)
+    summaries = [row.get("subject") or "" for row in rows]
+    render_receipts(images, receipt_path, summaries)
+
+    return ReceiptResult(
+        form_path=form_path,
+        receipt_path=receipt_path,
+        reimbursement=reimbursement,
+        receipt_info=ReceiptInfo(),
+        extracted_text="",
+    )
+
+
+def _parse_date(value: str | None) -> date | None:
+    """解析 YYYY-MM-DD 日期字符串。"""
+
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value).strip())
+    except ValueError:
+        return None
+
 
 
 def sample_reimbursement() -> Reimbursement:
