@@ -68,15 +68,13 @@ CN_CAP_UNITS = ["佰", "仟", "万", "仟", "佰", "拾", "元", "角", "分"]
 
 
 def _capital_text(value: Decimal) -> str:
-    """返回模板样式的中文大写金额（单位+数字分列，如 佰仟万仟贰佰零拾零元零角零分）。"""
+    """返回标准中文字大写金额；分位为 0 时补「零分」，如 柒佰壹拾壹元肆角零分。"""
 
-    digits = _split_amount_digits(value)
-    result = "佰仟万仟" + CN_CAP_DIGITS[int(digits[3])]
-    for idx in (4, 5, 6, 7):
-        result += CN_CAP_UNITS[idx] + CN_CAP_DIGITS[int(digits[idx])]
-    result += "分"
-    if int(digits[8]) != 0:
-        result += CN_CAP_DIGITS[int(digits[8])]
+    from expense_reimbursement.models import amount_to_chinese
+
+    result = amount_to_chinese(value)
+    if result.endswith("角"):
+        result += "零分"
     return result
 
 
