@@ -68,14 +68,17 @@ CN_CAP_UNITS = ["佰", "仟", "万", "仟", "佰", "拾", "元", "角", "分"]
 
 
 def _capital_text(value: Decimal) -> str:
-    """返回标准中文字大写金额；分位为 0 时补「零分」，如 柒佰壹拾壹元肆角零分。"""
+    """返回模板样式大写：固定高位单位佰仟万仟 + 标准大写（分位0补零分）。
+
+    如 711.40 -> 佰仟万仟柒佰壹拾壹元肆角零分。
+    """
 
     from expense_reimbursement.models import amount_to_chinese
 
     result = amount_to_chinese(value)
     if result.endswith("角"):
         result += "零分"
-    return result
+    return "佰仟万仟" + result
 
 
 # 模板列坐标（pt，页顶 x）
