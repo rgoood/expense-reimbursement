@@ -50,6 +50,17 @@ def _wrap_text(text: str, max_width: float, font_size: float) -> list[str]:
     return lines
 
 
+def _fit_text(text: str, max_width: float, font_size: float) -> str:
+    """按最大宽度截断文本，超出用省略号。"""
+
+    if pdfmetrics.stringWidth(text, FONT, font_size) <= max_width:
+        return text
+    ellipse = "..."
+    while text and pdfmetrics.stringWidth(text + ellipse, FONT, font_size) > max_width:
+        text = text[:-1]
+    return text + ellipse
+
+
 def _draw_table(
     c: canvas.Canvas,
     x: float,
@@ -67,7 +78,8 @@ def _draw_table(
         x_cursor = x_pos
         for col, col_w in zip(row, col_widths, strict=False):
             c.setFont(FONT, font_size)
-            c.drawString(x_cursor + 4, y_pos + 6, col)
+            display = _fit_text(col, col_w - 8, font_size)
+            c.drawString(x_cursor + 4, y_pos + 6, display)
             c.rect(x_cursor, y_pos, col_w, row_height)
             x_cursor += col_w
     return y - len(rows) * row_height
@@ -100,7 +112,8 @@ def render_reimbursement_form(
     c.setFont(FONT, 10)
     c.drawString(MARGIN, info_y - 42, "费用明细")
     table_y = info_y - 60
-    col_widths = [24.0, 46.0, 22.0, 36.0]
+    col_widths = [30.0, 140.0, 90.0, 75.0]
+    table_x = (A5_W - sum(col_widths)) / 2
     header = ["序号", "内容", "日期", "金额"]
     table_y -= 18
     rows: list[list[str]] = [header]
@@ -113,7 +126,7 @@ def render_reimbursement_form(
                 str(item.amount),
             ]
         )
-    table_y = _draw_table(c, MARGIN, table_y, col_widths, rows)
+    table_y = _draw_table(c, table_x, table_y, col_widths, rows)
 
     # 合计
     total_y = table_y - 24

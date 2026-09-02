@@ -77,11 +77,31 @@ def _categorize(text: str) -> Category:
 
 
 def _extract_merchant(text: str) -> str:
-    """抽取商户/公司名（优先独立行，其次行内中文词组）。"""
+    """抽取商户/公司名（优先收票主体，其次购方，再次独立行/中文词组）。"""
 
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    skip_prefixes = ("收款", "付款", "纳税人", "订单", "金额", "日期", "单号", "发票", "备注")
-    # 优先：不含金额、不含日期关键词且不以字段名前缀开头的行
+    seller_pattern = re.compile(
+        r"(?:销售方名称|收款方名称|收款方|收款单位|商户名称|商户|付款方名称|公司名称)\s*[:：]?\s*([^\s:：]{2,30})"
+    )
+    # 1) 优先销售方/收款方/商户等收票主体
+    for line in lines:
+        match = seller_pattern.search(line)
+        if match:
+            return match.group(1).strip()
+    # 2) 其次购买方名称
+    buyer_pattern = re.compile(r"(?:购买方名称|购买方)\s*[:：]?\s*([^\s:：]{2,30})")
+    for line in lines:
+        match = buyer_pattern.search(line)
+        if match:
+            return match.group(1).strip()
+    # 3) 排除发票/收据标题行与字段行
+    title_words = (
+        "增值税", "电子发票", "普通发票", "专用发票", "收据", "小票", "发票号码", "发票代码"
+    )
+    skip_prefixes = (
+        "收款", "付款", "纳税人", "订单", "金额", "日期", "单号", "代码", "备注", "合计",
+        "价税", "购买方", "销售方",
+    )
     candidates = [
         line
         for line in lines
@@ -89,20 +109,40 @@ def _extract_merchant(text: str) -> str:
         and "年" not in line
         and "月" not in line
         and "日" not in line
+        and not any(word in line for word in title_words)
         and not any(line.startswith(prefix) for prefix in skip_prefixes)
         and len(line) >= 2
     ]
     if candidates:
         return candidates[0]
-    # 兜底：抽取行内第一个连续中文词组作为商户名
-    cn_pattern = re.compile(r"[一-龥]{2,12}")
+    # 4) 兜底：抽取第一个连续中文词组
+    cn_pattern = re.compile(r"[\u4e00-\u9fa5]{2,12}")
     for line in lines:
+        if any(word in line for word in title_words):
+            continue
         if any(line.startswith(prefix) for prefix in skip_prefixes):
             continue
         match = cn_pattern.search(line)
         if match and "年" not in match.group(0) and "月" not in match.group(0):
             return match.group(0)
     return ""
+
+
+def _extract_description(text: str) -> str:
+    """抽取费用项目/摘要描述（优先字段名，其次商户名，最后截断）。"""
+
+    field_pattern = re.compile(
+        r"(?:项目名称|商品名称|货物名称|服务名称|摘要|费用项目|内容)\s*[:：]?\s*([^\s:：]{2,20})"
+    )
+    for line in text.splitlines():
+        match = field_pattern.search(line.strip())
+        if match:
+            return match.group(1).strip()
+    merchant = _extract_merchant(text)
+    if merchant:
+        return merchant
+    normalized = text.replace("\n", " ").strip()
+    return normalized[:20]
 
 
 def parse_receipt_text(text: str) -> tuple[ExpenseItem, ReceiptInfo]:
@@ -114,7 +154,7 @@ def parse_receipt_text(text: str) -> tuple[ExpenseItem, ReceiptInfo]:
     order_match = ORDER_NO_RE.search(text)
 
     item = ExpenseItem(
-        description=text[:60].replace("\n", " ").strip(),
+        description=_extract_description(text),
         amount=amount,
         category=_categorize(text),
         date=item_date,

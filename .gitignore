@@ -34,3 +34,6 @@ output/
 .env
 .env.*
 !keep.env.example
+
+# Local test assets
+sample/
