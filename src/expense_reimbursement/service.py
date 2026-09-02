@@ -48,6 +48,7 @@ def process_receipt(
     cashier: str = "",
     original_loan: Decimal = Decimal("0"),
     refund: Decimal = Decimal("0"),
+    date: date | None = None,
 ) -> ReceiptResult:
     """处理一张凭证并输出两张 A5 PDF。"""
 
@@ -70,7 +71,9 @@ def process_receipt(
         items=[item],
         remarks=remarks or item.remarks
         or "美元消费，人民币入账，按银行账单金额报销。",
-        created_at=datetime.now(),
+        created_at=datetime.combine(date, datetime.min.time())
+        if date
+        else datetime.now(),
         attachment_pages=attachment_pages,
         original_loan=original_loan,
         refund=refund,

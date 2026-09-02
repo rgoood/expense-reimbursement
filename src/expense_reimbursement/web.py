@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
 from flask import Flask, render_template, request, send_from_directory, url_for
 
+from expense_reimbursement.ai_summary import summarize
 from expense_reimbursement.models import PaymentMethod
+from expense_reimbursement.ocr import get_engine
+from expense_reimbursement.parser import parse_receipt_text
 from expense_reimbursement.service import process_receipt
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -41,6 +45,17 @@ def _dec(value: str | None) -> Decimal:
         return Decimal("0")
 
 
+def _parse_date(value: str | None) -> date | None:
+    """解析 YYYY-MM-DD 日期字符串，失败返回 None。"""
+
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value.strip())
+    except ValueError:
+        return None
+
+
 def _int(value: str | None, default: int = 1) -> int:
     if value is None:
         return default
@@ -53,6 +68,48 @@ def _int(value: str | None, default: int = 1) -> int:
 @app.get("/")
 def index() -> str:
     return render_template("index.html", payments=_payments())
+
+
+
+
+
+@app.post("/preview")
+def preview() -> Any:
+    """上传图片后即时 OCR 识别，返回建议的项目/事由/备注等，供前端回填。"""
+
+    file = request.files.get("receipt")
+    if not file or not file.filename:
+        return {"error": "请选择票据图片。"}, 400
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXT:
+        return {"error": "不支持的图片格式，请上传 jpg/png/bmp/webp 等图片。"}, 400
+
+    # 保存临时文件
+    stem = Path(file.filename).stem.replace(" ", "_") or "preview"
+    tmp_path = OUTPUT_DIR / f"{stem}_{_unix_ts()}{ext}"
+    file.save(tmp_path)
+
+    try:
+        engine = get_engine()
+        text = engine.extract_text(tmp_path)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"OCR 识别失败：{exc}. 请确认本机已安装 Tesseract OCR 及中文语言包。"}, 500
+
+    item, receipt_info = parse_receipt_text(text)
+    ai = summarize(text, receipt_info.merchant, item.amount)
+    date_str = item.date.isoformat() if item.date else ""
+
+    return {
+        "project": ai["project"],
+        "subject": ai["subject"],
+        "remarks": ai["remarks"],
+        "merchant": receipt_info.merchant,
+        "tax_id": receipt_info.tax_id,
+        "amount": str(item.amount),
+        "date": date_str,
+        "pages": 1,
+        "extracted_text": text,
+    }
 
 
 @app.post("/process")
@@ -79,8 +136,7 @@ def process() -> Any:
     subject = (request.form.get("subject") or "").strip()
     remarks = (request.form.get("remarks") or "").strip()
     project = (request.form.get("project") or "").strip()
-    payment_raw = (request.form.get("payment_method") or "其他").strip()
-    payment_method = PaymentMethod(payment_raw)
+    date_value = _parse_date(request.form.get("date"))
     pages = _int(request.form.get("pages"), 1)
     reimburser = (request.form.get("reimburser") or "").strip()
     supervisor = (request.form.get("supervisor") or "").strip()
@@ -101,7 +157,7 @@ def process() -> Any:
             applicant=applicant,
             department=department,
             subject=subject,
-            payment_method=payment_method,
+            date=date_value,
             remarks=remarks,
             attachment_pages=pages,
             project=project,
@@ -139,7 +195,7 @@ def process() -> Any:
             "applicant": r.applicant,
             "department": r.department,
             "subject": r.subject,
-            "payment_method": r.payment_method.value,
+            "date": r.created_at.strftime("%Y-%m-%d"),
             "remarks": r.remarks,
             "reimburser": r.reimburser,
             "attachment_pages": r.attachment_pages,

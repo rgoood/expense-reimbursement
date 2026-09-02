@@ -51,24 +51,22 @@
         <div class="icon">&#128196;</div>
         <p>拖拽图片到这里，或 <span style="color:#316FD9">点击选择</span></p>
         <small>支持 JPG / PNG / BMP / WEBP / TIFF</small>
-        <div id="fileName"></div>
+        <div id="fileName"></div><div id="recoStatus" style="margin-top:8px;color:#27a763;font-size:13px;"></div>
         <input type="file" id="file" name="receipt" accept=".jpg,.jpeg,.png,.bmp,.webp,.tiff,.gif" hidden>
       </div>
 
       <h2 style="margin-top:24px">2. 报销信息（可填，留空自动识别）</h2>
       <div class="grid">
-        <div class="field"><label>报销部门</label><input name="department" placeholder="如：运营八部"></div>
+        <div class="field"><label>报销部门</label><input name="department" id="deptInput" placeholder="如：运营八部"></div>
         <div class="field"><label>报销人</label><input name="reimburser" placeholder="默认 陈兴华"></div>
-        <div class="field"><label>报销项目</label><input name="project" placeholder="如：服务费 / 差旅费"></div>
+        <div class="field"><label>报销项目</label><input name="project" id="projectInput" placeholder="如：服务费 / 差旅费"></div>
         <div class="field">
-          <label>支付方式</label>
-          <select name="payment_method">
-            {% for p in payments %}<option>{{ p }}</option>{% endfor %}
-          </select>
+          <label>报销日期（默认今天）</label>
+          <input name="date" type="date" id="reimbDate">
         </div>
-        <div class="field full"><label>报销事由（摘要）</label><input name="subject" placeholder="如：OPENROUTER API 充值"></div>
-        <div class="field full"><label>备注</label><input name="remarks" placeholder="如：美元消费，人民币入账，按银行账单金额报销。"></div>
-        <div class="field"><label>单据及附件页数</label><input name="pages" type="number" value="1" min="1"></div>
+        <div class="field full"><label>报销事由（摘要）</label><input name="subject" id="subjectInput" placeholder="如：OPENROUTER API 充值"></div>
+        <div class="field full"><label>备注</label><input name="remarks" id="remarksInput" placeholder="如：美元消费，人民币入账，按银行账单金额报销。"></div>
+        <div class="field"><label>单据及附件页数</label><input name="pages" type="number" id="pagesInput" value="1" min="1"></div>
         <div class="field"><label>会计主管</label><input name="supervisor"></div>
         <div class="field"><label>复核</label><input name="reviewer"></div>
         <div class="field"><label>出纳</label><input name="cashier"></div>
@@ -102,6 +100,35 @@
     document.getElementById('submitBtn').disabled = true;
     document.getElementById('submitBtn').textContent = '识别中，请稍候…';
   });
+
+  // 默认日期=今天
+  (function(){ const d=new Date(); const dd=String(d.getDate()).padStart(2,'0'); const mm=String(d.getMonth()+1).padStart(2,'0'); document.getElementById('reimbDate').value=d.getFullYear()+'-'+mm+'-'+dd; })();
+
+  // 选中/拖拽图片后，自动调 /preview 识别并回填
+  async function autoFill(){
+    const f = fileInput.files[0];
+    if(!f) return;
+    const status = document.getElementById('recoStatus');
+    status.textContent = '正在识别票据…';
+    const fd = new FormData(); fd.append('receipt', f);
+    try {
+      const resp = await fetch("{{ url_for('preview') }}", { method:'POST', body: fd });
+      const data = await resp.json();
+      if(data.error){ status.textContent = ''; status.style.color='#c0392b'; status.textContent = data.error; return; }
+      if(data.project) document.getElementById('projectInput').value = data.project;
+      if(data.subject) document.getElementById('subjectInput').value = data.subject;
+      if(data.remarks) document.getElementById('remarksInput').value = data.remarks;
+      if(data.merchant && !document.getElementById('deptInput').value) {}
+      if(data.date) document.getElementById('reimbDate').value = data.date;
+      if(data.pages) document.getElementById('pagesInput').value = data.pages;
+      status.style.color='#27a763';
+      status.textContent = '已识别：' + (data.merchant || '凭证') + (data.amount ? ' ¥'+data.amount : '') + '（可核对修改）';
+    } catch(e){
+      status.style.color='#c0392b'; status.textContent = '识别失败，可直接填写后生成。';
+    }
+  }
+  const showName = function(){ const f=fileInput.files[0]; fileName.textContent = f ? '已选择：'+f.name : ''; autoFill(); };
+  fileInput.addEventListener('change', showName);
 </script>
 </body>
 </html>
